@@ -79,9 +79,10 @@ function Header({ editMode }) {
       <div className="contact-bar">
         <div className="container contact-bar-inner">
           <div className="contact-bar-links">
-            <span>Study guidance for your next step</span>
+            <a href="tel:+9779802589183"><Icon name="phone" size={13} /><EditableText id="company-phone-0" value={siteContent.company.phones[0]} editMode={editMode} /></a>
+            <a href={`mailto:${siteContent.company.email}`}><Icon name="mail" size={13} /><EditableText id="company-email" value={siteContent.company.email} editMode={editMode} /></a>
           </div>
-          <a className="top-consult" href={appUrl('/contact-us/')}><EditableText id="header-top-consult" value="Free consultation" editMode={editMode} /> <Icon name="arrow" size={14} /></a>
+          <a className="top-consult" href={appUrl('/contact-us/')}><EditableText id="header-top-consult" value="Contact GEMS" editMode={editMode} /> <Icon name="arrow" size={14} /></a>
         </div>
       </div>
       <header className="site-header" id="home">
@@ -133,7 +134,7 @@ function BannerCarousel() {
 function UniversityRail({ editMode }) {
   const universities = useSiteCollection('universities', siteContent.universities);
   if (!universities.length) return null;
-  return <div className="university-rail"><div className="container rail-inner"><span className="rail-label"><EditableText id="university-rail-label" value="Trusted university partners" editMode={editMode} /></span><div className="rail-logos">{universities.slice(0, 6).map((university, index) => <div className="rail-logo" key={university.id || index}>{university.image && <img src={appUrl(university.image)} alt={`${university.name} logo`} />}</div>)}</div></div></div>;
+  return <div className="university-rail"><div className="container rail-inner"><span className="rail-label"><EditableText id="university-rail-label" value="Institutions to explore" editMode={editMode} /></span><div className="rail-logos">{universities.slice(0, 6).map((university, index) => <div className="rail-logo" key={university.id || index}>{university.image && <img src={appUrl(university.image)} alt={`${university.name} logo`} />}</div>)}</div></div></div>;
 }
 
 function InquiryForm({ editMode }) {
@@ -158,7 +159,7 @@ function InquiryForm({ editMode }) {
     <form className="inquiry-card" onSubmit={handleSubmit}>
       <div className="form-heading">
         <span className="eyebrow"><EditableText id="form-eyebrow" value="Let’s plan your next step" editMode={editMode} /></span>
-        <EditableText id="form-title" value="Get free consultation" editMode={editMode} as="h3" />
+        <EditableText id="form-title" value="Request a consultation" editMode={editMode} as="h3" />
         <EditableText id="form-intro" value="Share a few details and our team will guide you." editMode={editMode} as="p" />
       </div>
       <div className="form-fields">
@@ -215,7 +216,7 @@ function IntroSection({ editMode }) {
   return (
     <section className="intro-section section-pad" id="about">
       <div className="container intro-grid">
-        <div className="intro-mark"><div className="intro-mark-ring"><span>K</span></div><span className="mark-caption"><EditableText id="intro-mark-caption" value="YOUR DREAM, OUR MISSION" editMode={editMode} as="span" /></span></div>
+        <div className="intro-mark"><div className="intro-mark-ring"><span>G</span></div><span className="mark-caption"><EditableText id="intro-mark-caption" value="STUDY SMART, DREAM BIG" editMode={editMode} as="span" /></span></div>
         <div className="intro-copy">
           <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="intro-eyebrow" value="About GEMS Group Services" editMode={editMode} /></div>
           <EditableText id="intro-title" value={siteContent.intro.title} editMode={editMode} as="h2" />
@@ -232,8 +233,8 @@ function ServicesSection({ editMode }) {
     <section className="services-section section-pad" id="services">
       <div className="container">
         <div className="section-heading split-heading">
-          <div><div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="services-kicker" value="Your dream, our mission" editMode={editMode} /></div><EditableText id="services-title" value="Guidance at every step" editMode={editMode} as="h2" /></div>
-          <EditableText id="services-intro" value="From the first conversation to your first day on campus, we’ll help you move forward with clarity." editMode={editMode} as="p" />
+          <div><div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="services-kicker" value="Student-centred support" editMode={editMode} /></div><EditableText id="services-title" value="Guidance at every step" editMode={editMode} as="h2" /></div>
+          <EditableText id="services-intro" value="From academic exploration to application follow-up, we help make the next steps easier to understand." editMode={editMode} as="p" />
         </div>
         <div className="service-grid">
           {siteContent.services.map((service, index) => <article className="service-card" key={service.title}>
@@ -251,14 +252,14 @@ function AchievementSection({ editMode }) {
     <section className="achievement-section section-pad">
       <div className="container achievement-grid">
         <div className="achievement-copy">
-          <div className="eyebrow eyebrow-light"><span className="eyebrow-line" /> <EditableText id="achievement-kicker" value="Experience that makes a difference" editMode={editMode} /></div>
+          <div className="eyebrow eyebrow-light"><span className="eyebrow-line" /> <EditableText id="achievement-kicker" value="A clear student journey" editMode={editMode} /></div>
           <EditableText id="achievement-title" value={siteContent.achievements.title} editMode={editMode} as="h2" />
           <EditableText id="achievement-body" value={siteContent.achievements.body} editMode={editMode} as="p" />
-          <a href="#contact" className="button button-light"><EditableText id="achievement-cta" value="Meet our counsellors" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
+          <a href="#contact" className="button button-light"><EditableText id="achievement-cta" value="Talk to GEMS" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
         </div>
         <div className="metrics-grid">
           {siteContent.achievements.metrics.map((metric, index) => <div className="metric-card" key={metric.label}><span className="metric-value"><EditableText id={`metric-${index}-value`} value={metric.value} editMode={editMode} /></span><EditableText id={`metric-${index}-label`} value={metric.label} editMode={editMode} as="span" className="metric-label" /></div>)}
-          <div className="metric-note"><span className="metric-note-symbol">✳</span><EditableText id="metric-note" value="Personal support at every stage" editMode={editMode} as="span" /></div>
+          <div className="metric-note"><span className="metric-note-symbol">✳</span><EditableText id="metric-note" value="Personalized, organized follow-up" editMode={editMode} as="span" /></div>
         </div>
       </div>
     </section>
@@ -272,9 +273,9 @@ function UniversitiesSection({ editMode }) {
     <section className="universities-section section-pad" id="universities">
       <div className="container">
         <div className="section-heading centered-heading">
-          <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="universities-kicker" value="Choose your next chapter" editMode={editMode} /></div>
-          <EditableText id="universities-title" value="Explore leading universities in India" editMode={editMode} as="h2" />
-          <EditableText id="universities-subtitle" value="We are proud to connect students with respected institutions and a wide choice of programs." editMode={editMode} as="p" />
+          <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="universities-kicker" value="Explore academic options" editMode={editMode} /></div>
+          <EditableText id="universities-title" value="Explore institution profiles" editMode={editMode} as="h2" />
+          <EditableText id="universities-subtitle" value="Compare study options and use each institution’s official channels to confirm current program and admission details." editMode={editMode} as="p" />
         </div>
         <div className="university-grid">
           {universities.map((university, index) => <a className="university-card" key={university.id || index} href={appUrl(university.href || '/universities/')}>
@@ -282,7 +283,7 @@ function UniversitiesSection({ editMode }) {
             <div className="university-info"><div><h3>{university.name}</h3><span>{university.city}</span></div><span className="circle-arrow"><Icon name="arrow" size={16} /></span></div>
           </a>)}
         </div>
-        <div className="university-footnote"><span className="tiny-star">✦</span> <EditableText id="universities-footnote" value="More university options are available through our counsellors." editMode={editMode} /></div>
+        <div className="university-footnote"><span className="tiny-star">✦</span> <EditableText id="universities-footnote" value="Profiles are informational. Formal representation or partnership is confirmed only through a separate written agreement." editMode={editMode} /></div>
       </div>
     </section>
   );
@@ -326,13 +327,13 @@ function ContactSection({ editMode }) {
           <div className="eyebrow eyebrow-light"><span className="eyebrow-line" /> <EditableText id="contact-kicker" value="Let’s talk about your future" editMode={editMode} /></div>
           <EditableText id="contact-title" value="Ready to take the next step?" editMode={editMode} as="h2" />
           <EditableText id="contact-text" value="Tell us what you want to study. Our counsellors will help you understand your options." editMode={editMode} as="p" />
-          <span className="contact-phone">GEMS Group Services</span>
+          <span className="contact-phone"><EditableText id="company-phone-0" value={siteContent.company.phones[0]} editMode={editMode} /> · <EditableText id="company-email" value={siteContent.company.email} editMode={editMode} /></span>
         </div>
         <div className="contact-action">
           <a className="button button-light" href={appUrl('/contact-us/')}><EditableText id="contact-form-cta" value="Send an enquiry" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
           <EditableText id="contact-action-note" value="We’re happy to help you get started." editMode={editMode} as="span" />
         </div>
-        <div className="contact-decoration" aria-hidden="true">K</div>
+        <div className="contact-decoration" aria-hidden="true">G</div>
       </div>
     </section>
   );
@@ -344,10 +345,10 @@ function Footer({ editMode }) {
       <div className="container footer-grid">
         <div className="footer-brand">
           <a href={appUrl('/')}><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /></a>
-          <EditableText id="footer-description" value="Nepal’s education consultancy for students aspiring to study in India. Helping you choose a path with confidence." editMode={editMode} as="p" />
+          <EditableText id="footer-description" value="An education consultancy in Birgunj, Nepal, supporting informed academic choices, admission guidance, and institutional engagement." editMode={editMode} as="p" />
         </div>
-        <div className="footer-links"><h3><EditableText id="footer-explore-title" value="Explore" editMode={editMode} /></h3><a href={appUrl('/about-us/')}><EditableText id="footer-about-label" value="About us" editMode={editMode} /></a><a href={appUrl('/scholarships/')}><EditableText id="footer-services-label" value="Our services" editMode={editMode} /></a><a href={appUrl('/universities/')}><EditableText id="footer-universities-label" value="Universities" editMode={editMode} /></a><a href={appUrl('/#testimonials')}><EditableText id="footer-testimonials-label" value="Testimonials" editMode={editMode} /></a><a href={appUrl('/blogs/')}><EditableText id="footer-guides-label" value="Student guides" editMode={editMode} /></a></div>
-        <div className="footer-contact"><h3>Get guidance</h3><a href={appUrl('/contact-us/')}><Icon name="arrow" size={16} /> Send an enquiry</a><p>Tell us about your study plans through the enquiry form.</p></div>
+        <div className="footer-links"><h3><EditableText id="footer-explore-title" value="Explore" editMode={editMode} /></h3><a href={appUrl('/about-us/')}><EditableText id="footer-about-label" value="About us" editMode={editMode} /></a><a href={appUrl('/scholarships/')}><EditableText id="footer-services-label" value="Our services" editMode={editMode} /></a><a href={appUrl('/universities/')}><EditableText id="footer-universities-label" value="Study options" editMode={editMode} /></a><a href={appUrl('/blogs/')}><EditableText id="footer-guides-label" value="Student guides" editMode={editMode} /></a></div>
+        <div className="footer-contact"><h3>Contact GEMS</h3><a href="tel:+9779802589183"><EditableText id="company-phone-0" value={siteContent.company.phones[0]} editMode={editMode} /></a><a href="tel:+9779705967555"><EditableText id="company-phone-1" value={siteContent.company.phones[1]} editMode={editMode} /></a><a href={`mailto:${siteContent.company.email}`}><EditableText id="company-email" value={siteContent.company.email} editMode={editMode} /></a><p><EditableText id="company-office" value={siteContent.company.office} editMode={editMode} /></p><a href="https://www.gemsgroup.edu.np" target="_blank" rel="noreferrer"><EditableText id="company-website" value={siteContent.company.website} editMode={editMode} /></a></div>
       </div>
       <div className="container footer-bottom"><EditableText id="footer-copyright" value="GEMS Group Services © 2026" editMode={editMode} as="span" /><a href={appUrl('/#home')}><EditableText id="footer-back-top" value="Back to top ↑" editMode={editMode} /></a><EditableText id="footer-tagline" value="Built for a bright next step." editMode={editMode} as="span" /></div>
     </footer>

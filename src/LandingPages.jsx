@@ -217,10 +217,10 @@ export function LandingPageView({ page }) {
   }
 
   return <main className={`landing-page landing-theme-${page.theme || 'blue'}`}>
-    <header className="landing-header"><a href={appUrl('/')} aria-label="GEMS Group Services home"><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /></a><span>{preview && !page.published ? 'Preview · Draft' : 'Free student guidance'}</span></header>
+    <header className="landing-header"><a href={appUrl('/')} aria-label="GEMS Group Services home"><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /></a><span>{preview && !page.published ? 'Preview · Draft' : 'Student guidance'}</span></header>
     <section className="landing-hero"><div className="landing-copy"><span className="landing-eyebrow">{page.eyebrow}</span><h1>{page.headline}</h1><p>{page.description}</p><a className="landing-cta" href="#lead-form">{page.buttonLabel} <span aria-hidden="true">→</span></a><div className="landing-trust"><span>✓</span> Personal support from first enquiry to admission</div>{page.campaignImage && <img className="landing-campaign-image" src={appUrl(page.campaignImage)} alt={`${page.name || 'Campaign'} picture`} />}</div>
       <form className="landing-form" id="lead-form" onSubmit={submit}>
-        <span className="landing-form-kicker">GEMS GROUP SERVICES · INDIA ADMISSIONS</span><h2>{page.formTitle}</h2><p>Share your details and our counsellors will get in touch.</p>
+        <span className="landing-form-kicker">GEMS GROUP SERVICES · STUDENT SUPPORT</span><h2>{page.formTitle}</h2><p>Share your details and our team will follow up with guidance.</p>
         <p className="landing-required-note">Fields marked * are required.</p>
         <label><span className="landing-field-label">Full name <i>*</i></span><input name="name" autoComplete="name" placeholder="Your name" required /></label>
         <label><span className="landing-field-label">Gmail address <i>*</i></span><input name="email" type="email" autoComplete="email" placeholder="you@gmail.com" required /></label>

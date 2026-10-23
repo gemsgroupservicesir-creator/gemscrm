@@ -2,6 +2,7 @@ export const SITE_COPY_PREFIX = 'krishna-foundation-copy:';
 const COPY_EVENT = 'krishna-foundation-copy-updated';
 const COLLECTION_PREFIX = 'krishna-foundation-collection:';
 const COLLECTION_EVENT = 'krishna-foundation-collection-updated';
+const PROFILE_COPY_MIGRATION_KEY = 'gems-profile-copy-migration-v1';
 
 export function sanitizeWebsiteContent(value) {
   if (typeof value === 'string') {
@@ -27,6 +28,38 @@ export function sanitizeWebsiteContent(value) {
 
 export function sanitizeStoredWebsiteContent() {
   try {
+    if (!window.localStorage.getItem(PROFILE_COPY_MIGRATION_KEY)) {
+      const refreshedCopyIds = [
+        ...Array.from({ length: 9 }, (_, index) => `nav-${index}-label`),
+        'hero-eyebrow', 'hero-title-1', 'hero-title-2', 'hero-description', 'hero-authorized', 'hero-signoff',
+        'university-rail-label', 'form-title', 'header-top-consult', 'intro-title', 'intro-mark-caption', 'intro-body',
+        'services-kicker', 'services-intro', 'achievement-kicker', 'achievement-title', 'achievement-body', 'achievement-cta',
+        'metric-note', 'metric-0-value', 'metric-0-label', 'metric-1-value', 'metric-1-label', 'metric-2-value', 'metric-2-label',
+        'universities-kicker', 'universities-title', 'universities-subtitle', 'universities-footnote', 'about-summary',
+        'about-story-title', 'about-story-copy', 'contact-page-summary', 'contact-team-copy', 'contact-form-eyebrow',
+        'contact-form-label-destination', 'footer-description', 'footer-universities-label',
+        'university-list-eyebrow', 'university-list-title', 'university-list-summary', 'universities-heading', 'universities-intro',
+        'university-profile-programs-intro', 'article-sidebar-universities', 'article-cta-button',
+        'company-office', 'company-phone-0', 'company-phone-1', 'company-email', 'company-website',
+        ...Array.from({ length: 5 }, (_, index) => `contact-question-option-${index}`),
+        ...Array.from({ length: 4 }, (_, index) => `contact-destination-option-${index}`),
+      ];
+      refreshedCopyIds.forEach((id) => window.localStorage.removeItem(`${SITE_COPY_PREFIX}${id}`));
+
+      const testimonialsKey = `${COLLECTION_PREFIX}testimonials`;
+      try {
+        const testimonials = JSON.parse(window.localStorage.getItem(testimonialsKey) || '[]');
+        const legacySampleNames = new Set(['Rashmi Barmecha', 'Sabina Sitaula', 'Mahi Mahaseth', 'Keshab P. Pandey', 'Dristi Jayaswal', 'Chandra Prakash Yadav', 'Jayesh Shrestha']);
+        if (Array.isArray(testimonials)) {
+          const verifiedEntries = testimonials.filter((item) => !legacySampleNames.has(String(item?.name || '').trim()));
+          window.localStorage.setItem(testimonialsKey, JSON.stringify(verifiedEntries));
+        }
+      } catch {
+        // Ignore an invalid or unavailable testimonials collection.
+      }
+      window.localStorage.setItem(PROFILE_COPY_MIGRATION_KEY, 'complete');
+    }
+
     const obsoleteContactCopyIds = [
       'contact-phone', 'contact-email', 'contact-address', 'contact-office-hours', 'contact-hours-label',
       'contact-offices-heading', 'contact-offices-eyebrow', 'contact-office-0-title', 'contact-office-0-phone',
