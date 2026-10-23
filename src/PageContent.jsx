@@ -80,7 +80,7 @@ function LeadCapture() {
       <label><Editable id="contact-form-label-destination" text="Preferred destination" editMode={false} as="span" /><select name="destination">{['India', 'Nepal', 'Bangladesh', 'Still exploring'].map((label, index) => <option key={label}>{getSiteCopy(`contact-destination-option-${index}`, label)}</option>)}</select></label>
     </div>
     <button className="button button-primary" type="submit"><Editable id="contact-form-submit" text="Send enquiry" editMode={false} as="span" /> <span aria-hidden="true">→</span></button>
-    {sent && <p className="form-success" role="status"><Editable id="contact-form-success" text="Your enquiry is saved in the local CRM." editMode={false} as="span" /> <a href={appUrl('/crm')}><Editable id="contact-form-success-link" text="View CRM" editMode={false} as="span" /></a></p>}
+    {sent && <p className="form-success" role="status"><Editable id="contact-form-success" text="Thank you. Your enquiry has been received." editMode={false} as="span" /></p>}
   </form>;
 }
 

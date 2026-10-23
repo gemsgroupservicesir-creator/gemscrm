@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import CRM from './CRM.jsx';
 import SitePage, { resolveSitePage } from './PageContent.jsx';
 import { LandingPageView } from './LandingPages.jsx';
 import { resolveLandingPage } from './data/landingPages.js';
 import { faculties, siteContent } from './data/siteContent.js';
 import { addLead } from './data/crmStore.js';
 import { appPath, appUrl } from './data/siteUrl.js';
-import { getSiteCopy, readSiteCollection, saveSiteCopy, subscribeToSiteCollections, subscribeToSiteCopy, SITE_COPY_PREFIX } from './data/siteCopy.js';
+import { getSiteCopy, readSiteCollection, saveSiteCopy, subscribeToSiteCollections, subscribeToSiteCopy } from './data/siteCopy.js';
 import './styles.css';
 
-const EDIT_KEY_PREFIX = SITE_COPY_PREFIX;
+const crmEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_CRM === 'true';
+const CRM = crmEnabled ? React.lazy(() => import('./CRM.jsx')) : null;
 
 function Icon({ name, size = 18 }) {
   const paths = {
@@ -69,7 +69,7 @@ function useSiteCollection(id, fallback) {
   return items;
 }
 
-function Header({ editMode, onToggleEdit }) {
+function Header({ editMode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const phone = getSiteCopy('contact-phone', siteContent.contact.phone);
   const email = getSiteCopy('contact-email', siteContent.contact.email);
@@ -92,13 +92,9 @@ function Header({ editMode, onToggleEdit }) {
           </a>
           <nav className={`main-nav ${menuOpen ? 'nav-open' : ''}`} aria-label="Main navigation">
             {siteContent.navigation.map((item, index) => <a key={item.label} href={appUrl(item.href)} onClick={() => setMenuOpen(false)}><EditableText id={`nav-${index}-label`} value={item.label} editMode={editMode} /></a>)}
-            <a className="crm-nav-link" href={appUrl('/crm')}><EditableText id="crm-nav-label" value="CRM dashboard" editMode={editMode} /></a>
           </nav>
           <div className="header-actions">
             <a className="header-cta" href={appUrl('/contact-us/')}><EditableText id="header-cta" value="Talk to a counsellor" editMode={editMode} /> <Icon name="arrow" size={15} /></a>
-            <button className={`edit-button ${editMode ? 'active' : ''}`} onClick={onToggleEdit} aria-pressed={editMode} title={editMode ? 'Finish editing' : 'Edit page copy'}>
-              <Icon name={editMode ? 'check' : 'pen'} size={16} /><span>{editMode ? 'Done' : 'Edit page'}</span>
-            </button>
             <button className="menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}>
               <Icon name={menuOpen ? 'close' : 'menu'} size={22} />
             </button>
@@ -173,8 +169,8 @@ function InquiryForm({ editMode }) {
         <label><EditableText id="form-label-faculty" value="Faculty of interest" editMode={editMode} as="span" /><select name="faculty" defaultValue="" required><option value="" disabled>{getSiteCopy('form-faculty-placeholder', 'Select a faculty')}</option>{faculties.map((faculty) => <option key={faculty}>{faculty}</option>)}</select></label>
       </div>
       <button className="button button-primary form-submit" type="submit"><EditableText id="form-submit" value="Send enquiry" editMode={editMode} /> <Icon name="arrow" size={16} /></button>
-      <EditableText id="form-note" value="Enquiries are saved to this browser’s CRM." editMode={editMode} as="p" className="form-note" />
-      {sent && <div className="form-success" role="status"><Icon name="check" size={17} /> <EditableText id="form-success" value="Enquiry saved." editMode={editMode} /> <a href={appUrl('/crm')}><EditableText id="form-success-link" value="View CRM" editMode={editMode} /></a></div>}
+      <EditableText id="form-note" value="Share a few details so our team can guide you." editMode={editMode} as="p" className="form-note" />
+      {sent && <div className="form-success" role="status"><Icon name="check" size={17} /> <EditableText id="form-success" value="Thank you. Your enquiry has been received." editMode={editMode} /> </div>}
     </form>
   );
 }
@@ -366,33 +362,28 @@ function Footer({ editMode }) {
 }
 
 function App() {
-  const [editMode, setEditMode] = useState(false);
+  const editMode = false;
 
   const currentPath = appPath(window.location.pathname);
-  if (currentPath.replace(/\/+$/, '') === '/crm') return <CRM />;
+  if (currentPath.replace(/\/+$/, '') === '/crm') {
+    if (CRM) return <React.Suspense fallback={<main className="crm-unavailable">Loading…</main>}><CRM /></React.Suspense>;
+    return <main className="crm-unavailable" role="status">Page not found.</main>;
+  }
   const landingPage = resolveLandingPage(currentPath, window.location.search);
   if (landingPage) return <LandingPageView page={landingPage} />;
   const sitePage = resolveSitePage(currentPath);
 
-  function resetEdits() {
-    for (const key of Object.keys(window.localStorage)) {
-      if (key.startsWith(EDIT_KEY_PREFIX)) window.localStorage.removeItem(key);
-    }
-    window.location.reload();
-  }
-
   if (sitePage) return (
     <div className={`site ${editMode ? 'site-editing' : ''}`}>
-      <Header editMode={editMode} onToggleEdit={() => setEditMode((current) => !current)} />
+      <Header editMode={editMode} />
       <SitePage page={sitePage} editMode={editMode} />
       <Footer editMode={editMode} />
-      {editMode && <div className="edit-helper" role="status"><div><Icon name="pen" size={16} /><span>Editing enabled — select highlighted text. Changes save in this browser.</span></div><button onClick={resetEdits}>Reset edits</button></div>}
     </div>
   );
 
   return (
     <div className={`site ${editMode ? 'site-editing' : ''}`}>
-      <Header editMode={editMode} onToggleEdit={() => setEditMode((current) => !current)} />
+      <Header editMode={editMode} />
       <main>
         <BannerCarousel />
         <UniversityRail editMode={editMode} />
@@ -406,7 +397,6 @@ function App() {
         <ContactSection editMode={editMode} />
       </main>
       <Footer editMode={editMode} />
-      {editMode && <div className="edit-helper" role="status"><div><Icon name="pen" size={16} /><span>Editing enabled — select highlighted text. Changes save in this browser.</span></div><button onClick={resetEdits}>Reset edits</button></div>}
     </div>
   );
 }

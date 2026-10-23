@@ -40,6 +40,8 @@ jobs:
             echo "VITE_BASE_PATH=/$repository_name/" >> "$GITHUB_ENV"
           fi
       - name: Build site
+        env:
+          VITE_ENABLE_CRM: 'false'
         run: npm run build
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
