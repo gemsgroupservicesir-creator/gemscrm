@@ -1,0 +1,226 @@
+import { siteContent } from './siteContent.js';
+import { articles, partners } from '../PageContent.jsx';
+
+const field = (id, label, value, type = 'text') => ({ id, label, value: String(value ?? ''), type });
+const pair = (id, label, value) => field(id, label, value, 'textarea');
+
+export function getSiteEditorGroups() {
+  const home = [
+    field('hero-eyebrow', 'Hero eyebrow', siteContent.hero.eyebrow),
+    field('hero-title-1', 'Hero title, line 1', siteContent.hero.titleLineOne),
+    field('hero-title-2', 'Hero title, line 2', siteContent.hero.titleLineTwo),
+    pair('hero-description', 'Hero introduction', siteContent.hero.description),
+    pair('hero-authorized', 'Authorized university note', siteContent.hero.universityNote),
+    field('hero-signoff', 'Hero closing line', siteContent.hero.signoff),
+    field('university-rail-label', 'Partner strip label', 'Trusted university partners'),
+    field('form-eyebrow', 'Enquiry form label', 'Let’s plan your next step'),
+    field('form-title', 'Enquiry form heading', 'Get free consultation'),
+    pair('form-intro', 'Enquiry form introduction', 'Share a few details and our team will guide you.'),
+    field('form-label-name', 'Enquiry name label', 'Full name'),
+    field('form-placeholder-name', 'Enquiry name placeholder', 'Your name'),
+    field('form-label-email', 'Enquiry email label', 'Email address'),
+    field('form-placeholder-email', 'Enquiry email placeholder', 'you@example.com'),
+    field('form-label-phone', 'Enquiry phone label', 'Phone number'),
+    field('form-placeholder-phone', 'Enquiry phone placeholder', '+977'),
+    field('form-label-faculty', 'Enquiry faculty label', 'Faculty of interest'),
+    field('form-faculty-placeholder', 'Enquiry faculty placeholder', 'Select a faculty'),
+    field('form-submit', 'Enquiry submit button', 'Send enquiry'),
+    field('form-note', 'Enquiry form note', 'Enquiries are saved to this browser’s CRM.'),
+    field('form-success', 'Enquiry confirmation', 'Enquiry saved.'),
+    field('form-success-link', 'Enquiry CRM link', 'View CRM'),
+    field('header-top-consult', 'Top consultation link', 'Free consultation'),
+    field('header-cta', 'Header consultation button', 'Talk to a counsellor'),
+    field('crm-nav-label', 'CRM navigation link', 'CRM dashboard'),
+    field('hero-cta', 'Hero button', 'Start your journey'),
+    ...siteContent.highlights.flatMap((item, index) => [field(`highlight-${index}-title`, `Highlight ${index + 1} title`, item.title), pair(`highlight-${index}-text`, `Highlight ${index + 1} text`, item.text)]),
+    field('intro-title', 'About section heading', siteContent.intro.title),
+    field('intro-eyebrow', 'About section label', 'About Krishna Foundation'),
+    field('intro-mark-caption', 'About illustration caption', 'YOUR DREAM, OUR MISSION'),
+    pair('intro-body', 'About section text', siteContent.intro.body),
+    field('intro-link', 'About section link', 'Explore our services'),
+    field('services-title', 'Services heading', 'Guidance at every step'),
+    field('services-kicker', 'Services section label', 'Your dream, our mission'),
+    pair('services-intro', 'Services introduction', 'From the first conversation to your first day on campus, we’ll help you move forward with clarity.'),
+    ...siteContent.services.flatMap((item, index) => [field(`service-${index}-title`, `Service ${index + 1} title`, item.title), pair(`service-${index}-text`, `Service ${index + 1} text`, item.text)]),
+    field('achievement-title', 'Achievements heading', siteContent.achievements.title),
+    field('achievement-kicker', 'Achievements section label', 'Experience that makes a difference'),
+    pair('achievement-body', 'Achievements text', siteContent.achievements.body),
+    field('achievement-cta', 'Achievements button', 'Meet our counsellors'),
+    field('metric-note', 'Achievements note', 'Personal support at every stage'),
+    ...siteContent.achievements.metrics.flatMap((item, index) => [field(`metric-${index}-value`, `Metric ${index + 1} value`, item.value), field(`metric-${index}-label`, `Metric ${index + 1} label`, item.label)]),
+    field('universities-title', 'University section heading', 'Explore leading universities in India'),
+    field('universities-kicker', 'University section label', 'Choose your next chapter'),
+    pair('universities-subtitle', 'University section introduction', 'We are proud to connect students with respected institutions and a wide choice of programs.'),
+    field('universities-footnote', 'University section note', 'More university options are available through our counsellors.'),
+    field('testimonials-title', 'Testimonials heading', 'A little encouragement goes a long way'),
+    field('testimonials-kicker', 'Testimonials section label', 'Student stories'),
+    field('contact-title', 'Home contact heading', 'Ready to take the next step?'),
+    field('contact-kicker', 'Home contact label', 'Let’s talk about your future'),
+    pair('contact-text', 'Home contact text', 'Tell us what you want to study. Our counsellors will help you understand your options.'),
+    field('contact-email-cta', 'Contact email button', 'Write to us'),
+    field('contact-action-note', 'Contact callout text', 'We’re happy to help you get started.'),
+  ];
+
+  const about = [
+    field('about-eyebrow', 'About page eyebrow', 'ABOUT KRISHNA FOUNDATION'),
+    field('about-title', 'About page title', 'Your study journey, guided with care'),
+    pair('about-summary', 'About page introduction', 'For more than 12 years, Krishna Foundation has helped students from Nepal explore higher education opportunities in India.'),
+    field('about-story-eyebrow', 'About story label', 'OUR APPROACH'),
+    field('about-story-title', 'Our approach heading', 'A trusted guide from first questions to your first day on campus'),
+    pair('about-story-copy', 'Our approach text', 'We help students compare courses and universities, understand admissions, prepare applications, and plan the next steps. Our counsellors bring the important parts of the journey together so students and families can make informed choices with confidence.'),
+    ...siteContent.services.flatMap((item, index) => [field(`about-support-${index}-title`, `Support card ${index + 1} title`, item.title), pair(`about-support-${index}-text`, `Support card ${index + 1} text`, item.text)]),
+    ...siteContent.services.flatMap((_, index) => [field(`about-support-${index}-number`, `Support card ${index + 1} number`, `0${index + 1}`), field(`about-support-${index}-category`, `Support card ${index + 1} label`, 'STUDENT SUPPORT')]),
+    field('about-cta-title', 'About callout heading', 'Tell us what you want to study.'),
+    pair('about-cta-text', 'About callout text', 'We’ll help you understand the options available for your goals.'),
+    field('about-cta-eyebrow', 'About callout label', 'LET’S TALK'),
+    field('about-cta-button', 'About callout button', 'Talk to a counsellor'),
+  ];
+
+  const contact = [
+    field('contact-page-eyebrow', 'Contact page eyebrow', 'CONTACT KRISHNA FOUNDATION'),
+    field('contact-page-title', 'Contact page title', 'We’d be happy to meet you'),
+    pair('contact-page-summary', 'Contact page introduction', 'Talk with our team about courses, universities, admission steps, or your study plans.'),
+    field('contact-offices-heading', 'Offices heading', 'Find your nearest office'),
+    field('contact-offices-eyebrow', 'Offices label', 'OUR OFFICES'),
+    field('contact-office-0-title', 'Kathmandu office name', 'Head Office · Kathmandu'),
+    field('contact-address', 'Kathmandu office address', siteContent.contact.address),
+    field('contact-office-0-phone', 'Kathmandu office phone', '+977 01-4186218'),
+    field('contact-office-1-title', 'Gaighat office name', 'Branch Office · Gaighat'),
+    field('contact-office-1-address', 'Gaighat office address', 'Triyuga Municipality-11, Bidhyut Marga, Gaighat, Udayapur, Nepal'),
+    field('contact-office-1-phone', 'Gaighat office phone', '+977 035-590060 · +977 035-590061'),
+    field('contact-office-2-title', 'Janakpur office name', 'Branch Office · Janakpur'),
+    field('contact-office-2-address', 'Janakpur office address', 'D&B Complex Building, 3rd Floor, Bhanuchowk, Janakpur Dham, Nepal'),
+    field('contact-office-2-phone', 'Janakpur office phone', '+977 980-2067676'),
+    field('contact-office-hours', 'Office hours', 'Sunday–Friday · 10:00 AM–5:00 PM · Saturday closed'),
+    field('contact-hours-label', 'Office hours label', 'Office hours'),
+    field('contact-form-eyebrow', 'Contact form label', 'GET FREE CONSULTATION'),
+    field('contact-form-title', 'Contact form heading', 'Send us a message'),
+    pair('contact-form-summary', 'Contact form introduction', 'Share what you are looking for and our team will get back to you.'),
+    field('contact-form-label-name', 'Contact name label', 'Your name'),
+    field('contact-form-label-email', 'Contact email label', 'Email address'),
+    field('contact-form-label-phone', 'Contact phone label', 'Phone number'),
+    field('contact-form-label-office', 'Contact office label', 'Nearest office'),
+    field('contact-form-label-question', 'Contact question label', 'Your question'),
+    field('contact-form-label-destination', 'Contact destination label', 'Preferred destination'),
+    field('contact-form-submit', 'Contact form button', 'Send enquiry'),
+    field('contact-form-success', 'Contact form confirmation', 'Your enquiry is saved in the local CRM.'),
+    field('contact-form-success-link', 'Contact form CRM link', 'View CRM'),
+    ...['Kathmandu', 'Gaighat', 'Janakpur'].map((label, index) => field(`contact-office-option-${index}`, `Office option ${index + 1}`, label)),
+    ...['Course selection', 'University admission', 'Scholarship and funding', 'Visa and documents', 'Other'].map((label, index) => field(`contact-question-option-${index}`, `Question option ${index + 1}`, label)),
+    ...['India', 'Nepal', 'Bangladesh', 'Still exploring'].map((label, index) => field(`contact-destination-option-${index}`, `Destination option ${index + 1}`, label)),
+  ];
+
+  const universityDirectory = [
+    field('university-list-eyebrow', 'University page eyebrow', 'OUR UNIVERSITY PARTNERS'),
+    field('university-list-title', 'University page title', 'Explore universities in India'),
+    pair('university-list-summary', 'University page introduction', 'Compare partner institutions, locations, and study options. Our counsellors can help you find a course that fits your goals.'),
+    field('universities-section-eyebrow', 'University list section label', 'CHOOSE YOUR NEXT CHAPTER'),
+    field('universities-heading', 'Directory heading', 'Our university network'),
+    pair('universities-intro', 'Directory introduction', 'Browse the institutions featured by Krishna Foundation and open a profile to learn more.'),
+    field('partner-card-link', 'University card link', 'Explore university'),
+  ];
+
+  const universityProfiles = [
+    ...partners.flatMap((item) => [
+    field(`${item.slug}-eyebrow`, `${item.name} profile eyebrow`, `UNIVERSITY · ${item.city.toUpperCase()}`),
+    field(`${item.slug}-title`, `${item.name} profile title`, item.name),
+    pair(`${item.slug}-summary`, `${item.name} profile introduction`, item.description),
+    field(`university-${item.slug}-heading`, `${item.name} programs heading`, 'Find a program that suits your goals'),
+    pair(`university-${item.slug}-details`, `${item.name} programs introduction`, 'Program availability and entry requirements can change each intake. Contact a counsellor for help comparing current choices and application steps.'),
+    ...item.facts.map((fact, index) => pair(`university-${item.slug}-fact-${index}`, `${item.name} fact ${index + 1}`, fact)),
+    ]),
+    field('university-profile-options-label', 'University study options label', 'STUDY OPTIONS'),
+    field('university-profile-cta', 'University profile button', 'Ask about this university'),
+    field('university-profile-aside-label', 'Other university options label', 'MORE UNIVERSITY OPTIONS'),
+    field('university-profile-aside-title', 'Other university options heading', 'Continue exploring'),
+  ];
+
+  const scholarships = [
+    field('scholarships-eyebrow', 'Scholarships page eyebrow', 'SCHOLARSHIPS & FUNDING'),
+    field('scholarships-title', 'Scholarships page title', 'Explore ways to fund your studies'),
+    pair('scholarships-summary', 'Scholarships page introduction', 'Funding opportunities depend on the university, course, and intake. Ask our counsellors what to verify as you plan.'),
+    field('scholarships-heading', 'Funding section heading', 'Questions to ask about funding'),
+    field('scholarships-section-eyebrow', 'Funding section label', 'PLAN AHEAD'),
+    pair('scholarships-intro', 'Funding section text', 'Scholarship rules and deadlines change. Confirm current eligibility with the university or funding provider before making an application or financial decision.'),
+    ...[
+      { title: 'Check eligibility', text: 'Review academic criteria, citizenship rules, course restrictions, and the documents required for each opportunity.' },
+      { title: 'Confirm dates', text: 'Ask when applications open and close, when decisions are announced, and whether the award continues each year.' },
+      { title: 'Understand costs', text: 'Compare tuition, accommodation, travel, and other expenses alongside any confirmed scholarship amount.' },
+    ].flatMap((item, index) => [field(`scholarship-questions-${index}-title`, `Funding question ${index + 1} title`, item.title), pair(`scholarship-questions-${index}-text`, `Funding question ${index + 1} text`, item.text)]),
+    ...[
+      ...['Check eligibility', 'Confirm dates', 'Understand costs'].map((_, index) => field(`scholarship-questions-${index}-number`, `Funding card ${index + 1} number`, `0${index + 1}`)),
+      ...['Check eligibility', 'Confirm dates', 'Understand costs'].map((_, index) => field(`scholarship-questions-${index}-category`, `Funding card ${index + 1} label`, 'FUNDING CHECKLIST')),
+      field('scholarships-cta-eyebrow', 'Funding callout label', 'GET PERSONAL GUIDANCE'),
+      field('scholarships-cta-title', 'Funding callout heading', 'Discuss your study plan with us.'),
+      pair('scholarships-cta-text', 'Funding callout text', 'We can help you prepare questions and compare your next steps.'),
+      field('scholarships-cta-button', 'Funding callout button', 'Contact a counsellor'),
+    ],
+  ];
+
+  const guides = [
+    field('articles-eyebrow', 'Guides page eyebrow', 'NEWS, EVENTS & STUDENT GUIDES'),
+    field('articles-title', 'Guides page title', 'Ideas for your next step'),
+    pair('articles-summary', 'Guides page introduction', 'Read practical guides for students exploring courses, universities, scholarships, and study abroad.'),
+    field('articles-heading', 'Guide list heading', 'Latest student guides'),
+    field('articles-section-eyebrow', 'Guide list label', 'FROM THE BLOG'),
+    pair('articles-intro', 'Guide list introduction', 'These articles are recreated from the pages currently indexed for the original website.'),
+    field('article-card-category', 'Guide card category', 'Student guide'),
+    field('article-card-link', 'Guide card link', 'Read article'),
+    ...articles.flatMap((item) => [field(`article-${item.slug}-date`, `${item.title} date`, item.date), field(`article-${item.slug}-title`, `${item.title} card title`, item.title), pair(`article-${item.slug}-excerpt`, `${item.title} summary`, item.excerpt)]),
+  ];
+  const articlePages = [
+    ...articles.flatMap((item) => [
+    field(`${item.slug}-eyebrow`, `${item.title} page eyebrow`, `STUDENT GUIDE · ${item.date.toUpperCase()}`),
+    field(`${item.slug}-title`, `${item.title} page title`, item.title),
+    pair(`${item.slug}-summary`, `${item.title} page introduction`, item.excerpt),
+    ...item.paragraphs.map((paragraph, index) => pair(`article-${item.slug}-paragraph-${index}`, `${item.title} paragraph ${index + 1}`, paragraph)),
+    field(`article-${item.slug}-cta`, `${item.title} callout`, 'Talk through your options with a counsellor.'),
+    ]),
+    field('article-cta-eyebrow', 'Article callout label', 'NEED PERSONAL GUIDANCE?'),
+    field('article-cta-button', 'Article callout button', 'Get free consultation'),
+    field('article-sidebar-label', 'Article sidebar label', 'EXPLORE MORE'),
+    field('article-sidebar-universities', 'Article university link', 'University partners'),
+    field('article-sidebar-scholarships', 'Article scholarships link', 'Scholarships and funding'),
+    field('article-sidebar-guides', 'Article guides link', 'All student guides'),
+  ];
+
+  const global = [
+    ...siteContent.navigation.map((item, index) => field(`nav-${index}-label`, `Navigation link ${index + 1}`, item.label)),
+    field('contact-phone', 'Main contact phone', siteContent.contact.phone),
+    field('contact-email', 'Contact email', siteContent.contact.email),
+    field('contact-address', 'Main office address', siteContent.contact.address),
+    pair('footer-description', 'Footer introduction', 'Nepal’s education consultancy for students aspiring to study in India. Helping you choose a path with confidence.'),
+    field('footer-explore-title', 'Footer links heading', 'Explore'),
+    field('footer-contact-title', 'Footer contact heading', 'Contact us'),
+    field('footer-about-label', 'Footer About link', 'About us'),
+    field('footer-services-label', 'Footer services link', 'Our services'),
+    field('footer-universities-label', 'Footer universities link', 'Universities'),
+    field('footer-testimonials-label', 'Footer testimonials link', 'Testimonials'),
+    field('footer-guides-label', 'Footer guides link', 'Student guides'),
+    field('footer-copyright', 'Footer copyright line', 'Krishna Foundation Pvt. Ltd. © 2026'),
+    field('footer-back-top', 'Footer back-to-top link', 'Back to top ↑'),
+    field('footer-tagline', 'Footer tagline', 'Built for a bright next step.'),
+    field('footer-facebook-label', 'Facebook link label', 'Facebook'),
+    field('footer-instagram-label', 'Instagram link label', 'Instagram'),
+  ];
+
+  const makeId = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`}`;
+  const collections = [
+    { id: 'banners', title: 'Hero banners', description: 'Add, edit, or remove the image banners above the home page.', collectionId: 'banners', kind: 'banner', defaultItems: siteContent.banners, createItem: () => ({ id: makeId('banner'), image: '', alt: '' }) },
+    { id: 'home-universities', title: 'Universities', description: 'Manage the university cards shown on the home page and directory.', collectionId: 'universities', kind: 'university', defaultItems: siteContent.universities, createItem: () => ({ id: makeId('university'), name: '', city: '', image: '', href: '/universities/' }) },
+    { id: 'testimonials', title: 'Testimonials', description: 'Manage the student stories and photos shown on the home page.', collectionId: 'testimonials', kind: 'testimonial', defaultItems: siteContent.testimonials, createItem: () => ({ id: makeId('testimonial'), name: '', course: '', quote: '', image: '' }) },
+  ];
+
+  return [
+    { id: 'home', title: 'Home page', description: 'Hero, sections, university cards, and student testimonials.', fields: home },
+    ...collections,
+    { id: 'about', title: 'About page', description: 'About page story and support cards.', fields: about },
+    { id: 'contact', title: 'Contact page', description: 'Office details and contact form copy.', fields: contact },
+    { id: 'universities', title: 'Universities page copy', description: 'Directory page introduction and card link. Manage entries in the Universities section.', fields: universityDirectory },
+    { id: 'profiles', title: 'University profiles', description: 'Descriptions and program notes for each profile.', fields: universityProfiles },
+    { id: 'scholarships', title: 'Scholarships', description: 'Funding guidance page copy.', fields: scholarships },
+    { id: 'guides', title: 'Student guides', description: 'Guide list cards and article content.', fields: guides },
+    { id: 'articles', title: 'Guide pages', description: 'Individual article introductions and text.', fields: articlePages },
+    { id: 'global', title: 'Navigation & contact', description: 'Shared navigation labels and contact information.', fields: global },
+  ];
+}
