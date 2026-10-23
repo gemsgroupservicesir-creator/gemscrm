@@ -15,6 +15,21 @@ function safeLink(value) {
   return link.startsWith('/') && !link.startsWith('//') || /^https:\/\//i.test(link) ? link : '/universities/';
 }
 
+function safeSlug(value) {
+  return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+const reservedUniversitySlugs = new Set([
+  'about-us', 'contact-us', 'universities', 'scholarships', 'blogs', 'news-and-events', 'crm',
+  'top-6-universities-for-nepalese-students-in-india',
+  'the-role-and-importance-of-education-consultancy',
+  'things-nepalese-students-must-know-before-contacting-a-study-consultancy',
+  'amazing-scholarships-for-nepalese-students-in-india',
+  'how-to-get-a-no-objection-letter-in-nepal',
+  'careers-for-nepalese-students-after-12th',
+  'highest-paying-job-in-nepal-2023',
+]);
+
 export default function WebsiteEditor() {
   const groups = useMemo(() => getSiteEditorGroups(), []);
   const collectionGroups = useMemo(() => groups.filter((group) => group.collectionId), [groups]);
@@ -82,10 +97,31 @@ export default function WebsiteEditor() {
   function saveSection(event) {
     event.preventDefault();
     if (selected.collectionId) {
-      const required = selected.kind === 'banner' ? ['image', 'alt'] : selected.kind === 'university' ? ['name', 'city', 'image'] : ['name', 'course', 'quote'];
+      const isProfile = selected.kind === 'university-profile';
+      const required = selected.kind === 'banner' ? ['image', 'alt'] : selected.kind === 'university' ? ['name', 'city', 'image'] : isProfile ? ['name', 'city', 'description'] : ['name', 'course', 'quote'];
       const incomplete = currentItems.findIndex((item) => required.some((key) => !String(item[key] || '').trim()));
       if (incomplete !== -1) {
         setError(`Complete the required details for item ${incomplete + 1}, or remove it before saving.`);
+        setNotice('');
+        return;
+      }
+      const normalizedProfiles = isProfile ? currentItems.map((item) => ({
+        ...item,
+        slug: safeSlug(item.slug || item.name),
+        facts: (Array.isArray(item.facts) ? item.facts : []).map((fact) => String(fact).trim()).filter(Boolean),
+      })) : null;
+      if (isProfile && normalizedProfiles.some((item) => !item.slug)) {
+        setError('Each profile needs a URL name made from letters or numbers.');
+        setNotice('');
+        return;
+      }
+      if (isProfile && normalizedProfiles.some((item) => reservedUniversitySlugs.has(item.slug))) {
+        setError('A profile URL uses a reserved website page name. Choose another URL name.');
+        setNotice('');
+        return;
+      }
+      if (isProfile && new Set(normalizedProfiles.map((item) => item.slug)).size !== normalizedProfiles.length) {
+        setError('Each university profile needs a unique URL name.');
         setNotice('');
         return;
       }
@@ -95,7 +131,7 @@ export default function WebsiteEditor() {
         return;
       }
       try {
-        const normalized = selected.kind === 'university' ? currentItems.map((item) => ({ ...item, href: safeLink(item.href) })) : currentItems;
+        const normalized = isProfile ? normalizedProfiles : selected.kind === 'university' ? currentItems.map((item) => ({ ...item, href: safeLink(item.href) })) : currentItems;
         setCollections((current) => ({ ...current, [selected.collectionId]: normalized }));
         saveSiteCollection(selected.collectionId, normalized);
         setError('');
@@ -143,6 +179,14 @@ export default function WebsiteEditor() {
       {textField('href', 'Card link', { placeholder: '/universities/ or https://…' })}
       {imageField}
     </>;
+    if (selected.kind === 'university-profile') return <>
+      {textField('name', 'University name')}
+      {textField('slug', 'Profile URL name', { placeholder: 'e.g. new-university' })}
+      {textField('city', 'City or location')}
+      <label className="crm-editor-field">Profile introduction<textarea rows="4" value={item.description || ''} onChange={(event) => updateItem(index, 'description', event.target.value)} /></label>
+      <label className="crm-editor-field">Study options<textarea rows="4" value={(Array.isArray(item.facts) ? item.facts : []).join('\n')} placeholder="Enter one option per line" onChange={(event) => updateItem(index, 'facts', event.target.value.split('\n'))} /><small>Enter one study option per line. These appear in the profile.</small></label>
+      {imageField}
+    </>;
     return <>
       {textField('name', 'Student name')}
       {textField('course', 'Course or university')}
@@ -171,11 +215,11 @@ export default function WebsiteEditor() {
         <div className="crm-editor-form-head"><div><h2>{selected.title}</h2><p>{selected.description}</p></div>{savedCount > 0 && <span className="crm-edit-count">{savedCount} saved</span>}</div>
         {selected.collectionId ? <div className="crm-collection-editor">
           {currentItems.map((item, index) => <article className="crm-collection-card" key={item.id || index}>
-            <div className="crm-collection-card-head"><strong>{selected.kind === 'banner' ? `Banner ${index + 1}` : selected.kind === 'university' ? `University ${index + 1}` : `Testimonial ${index + 1}`}</strong><button className="crm-collection-remove" type="button" onClick={() => removeItem(index)}>Remove</button></div>
+            <div className="crm-collection-card-head"><strong>{selected.kind === 'banner' ? `Banner ${index + 1}` : selected.kind === 'university-profile' ? `Profile ${index + 1}` : selected.kind === 'university' ? `University ${index + 1}` : `Testimonial ${index + 1}`}</strong><button className="crm-collection-remove" type="button" onClick={() => removeItem(index)}>Remove</button></div>
             <div className="crm-editor-fields">{collectionFields(item, index)}</div>
           </article>)}
           {!currentItems.length && <p className="crm-collection-empty">There are no items in this section. Add one to show it on the website.</p>}
-          <button className="crm-secondary-button crm-collection-add" type="button" onClick={addItem}>＋ Add {selected.kind === 'banner' ? 'banner' : selected.kind === 'university' ? 'university' : 'testimonial'}</button>
+          <button className="crm-secondary-button crm-collection-add" type="button" onClick={addItem}>＋ Add {selected.kind === 'banner' ? 'banner' : selected.kind === 'university-profile' ? 'university profile' : selected.kind === 'university' ? 'university' : 'testimonial'}</button>
         </div> : <div className="crm-editor-fields">
           {currentFields.map((field) => <label className="crm-editor-field" key={field.id}>{field.label}{field.type === 'textarea' ? <textarea rows="3" value={currentValues[field.id] ?? field.value} onChange={(event) => updateValue(field.id, event.target.value)} /> : <input value={currentValues[field.id] ?? field.value} onChange={(event) => updateValue(field.id, event.target.value)} />}</label>)}
         </div>}

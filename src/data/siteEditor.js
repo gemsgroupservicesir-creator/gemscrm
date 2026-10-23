@@ -115,17 +115,8 @@ export function getSiteEditorGroups() {
     field('universities-heading', 'Directory heading', 'Our university network'),
     pair('universities-intro', 'Directory introduction', 'Browse the institutions featured by Krishna Foundation and open a profile to learn more.'),
     field('partner-card-link', 'University card link', 'Explore university'),
-  ];
-
-  const universityProfiles = [
-    ...partners.flatMap((item) => [
-    field(`${item.slug}-eyebrow`, `${item.name} profile eyebrow`, `UNIVERSITY · ${item.city.toUpperCase()}`),
-    field(`${item.slug}-title`, `${item.name} profile title`, item.name),
-    pair(`${item.slug}-summary`, `${item.name} profile introduction`, item.description),
-    field(`university-${item.slug}-heading`, `${item.name} programs heading`, 'Find a program that suits your goals'),
-    pair(`university-${item.slug}-details`, `${item.name} programs introduction`, 'Program availability and entry requirements can change each intake. Contact a counsellor for help comparing current choices and application steps.'),
-    ...item.facts.map((fact, index) => pair(`university-${item.slug}-fact-${index}`, `${item.name} fact ${index + 1}`, fact)),
-    ]),
+    field('university-profile-programs-heading', 'University programs heading', 'Find a program that suits your goals'),
+    pair('university-profile-programs-intro', 'University programs introduction', 'Program availability and entry requirements can change each intake. Contact a counsellor for help comparing current choices and application steps.'),
     field('university-profile-options-label', 'University study options label', 'STUDY OPTIONS'),
     field('university-profile-cta', 'University profile button', 'Ask about this university'),
     field('university-profile-aside-label', 'Other university options label', 'MORE UNIVERSITY OPTIONS'),
@@ -204,7 +195,8 @@ export function getSiteEditorGroups() {
   const makeId = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`}`;
   const collections = [
     { id: 'banners', title: 'Hero banners', description: 'Add, edit, or remove the image banners above the home page.', collectionId: 'banners', kind: 'banner', defaultItems: siteContent.banners, createItem: () => ({ id: makeId('banner'), image: '', alt: '' }) },
-    { id: 'home-universities', title: 'Universities', description: 'Manage the university cards shown on the home page and directory.', collectionId: 'universities', kind: 'university', defaultItems: siteContent.universities, createItem: () => ({ id: makeId('university'), name: '', city: '', image: '', href: '/universities/' }) },
+    { id: 'home-universities', title: 'Universities', description: 'Manage the featured university cards shown on the home page.', collectionId: 'universities', kind: 'university', defaultItems: siteContent.universities, createItem: () => ({ id: makeId('university'), name: '', city: '', image: '', href: '/universities/' }) },
+    { id: 'profiles', title: 'University profiles', description: 'Add, edit, or remove university profiles shown on the Universities page.', collectionId: 'university-profiles', kind: 'university-profile', defaultItems: partners, createItem: () => ({ id: makeId('university-profile'), slug: '', name: '', city: '', image: '', description: '', facts: [] }) },
     { id: 'testimonials', title: 'Testimonials', description: 'Manage the student stories and photos shown on the home page.', collectionId: 'testimonials', kind: 'testimonial', defaultItems: siteContent.testimonials, createItem: () => ({ id: makeId('testimonial'), name: '', course: '', quote: '', image: '' }) },
   ];
 
@@ -213,8 +205,7 @@ export function getSiteEditorGroups() {
     ...collections,
     { id: 'about', title: 'About page', description: 'About page story and support cards.', fields: about },
     { id: 'contact', title: 'Contact page', description: 'Office details and contact form copy.', fields: contact },
-    { id: 'universities', title: 'Universities page copy', description: 'Directory page introduction and card link. Manage entries in the Universities section.', fields: universityDirectory },
-    { id: 'profiles', title: 'University profiles', description: 'Descriptions and program notes for each profile.', fields: universityProfiles },
+    { id: 'universities', title: 'Universities page copy', description: 'Edit the university directory and profile page labels.', fields: universityDirectory },
     { id: 'scholarships', title: 'Scholarships', description: 'Funding guidance page copy.', fields: scholarships },
     { id: 'guides', title: 'Student guides', description: 'Guide list cards and article content.', fields: guides },
     { id: 'articles', title: 'Guide pages', description: 'Individual article introductions and text.', fields: articlePages },
