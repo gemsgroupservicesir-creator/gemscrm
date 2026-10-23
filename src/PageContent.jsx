@@ -59,7 +59,7 @@ function Editable({ id, text, editMode, as: Tag = 'p', className = '' }) {
 }
 
 function PageBanner({ eyebrow = 'GEMS GROUP SERVICES · STUDENT SUPPORT', eyebrowId = null, title, titleId = null, summary, summaryId = null, editMode, id }) {
-  return <section className="content-hero"><div className="container content-hero-inner"><div className="eyebrow eyebrow-light"><span className="eyebrow-line" /><Editable id={eyebrowId || `${id}-eyebrow`} text={eyebrow} editMode={editMode} as="span" /></div><Editable id={titleId || `${id}-title`} text={title} editMode={editMode} as="h1" /><Editable id={summaryId || `${id}-summary`} text={summary} editMode={editMode} as="p" /><div className="content-hero-mark" aria-hidden="true">G</div></div></section>;
+  return <section className="content-hero" data-reveal><div className="container content-hero-inner"><div className="eyebrow eyebrow-light"><span className="eyebrow-line" /><Editable id={eyebrowId || `${id}-eyebrow`} text={eyebrow} editMode={editMode} as="span" /></div><Editable id={titleId || `${id}-title`} text={title} editMode={editMode} as="h1" /><Editable id={summaryId || `${id}-summary`} text={summary} editMode={editMode} as="p" /><div className="content-hero-mark" aria-hidden="true">G</div></div></section>;
 }
 
 function LeadCapture() {
@@ -73,7 +73,7 @@ function LeadCapture() {
     setSent(true);
     form.reset();
   }
-  return <form className="contact-lead-form" onSubmit={submit}>
+  return <form className="contact-lead-form" data-reveal="right" onSubmit={submit}>
     <span className="eyebrow"><Editable id="contact-form-eyebrow" text="REQUEST A CONSULTATION" editMode={false} as="span" /></span>
     <Editable id="contact-form-title" text="Send us a message" editMode={false} as="h2" />
     <Editable id="contact-form-summary" text="Share what you are looking for and our team will get back to you." editMode={false} />
@@ -94,7 +94,7 @@ function PartnerGrid({ editMode }) {
   useEffect(() => subscribeToSiteCollections(({ id, value }) => {
     if (id === UNIVERSITY_PROFILE_COLLECTION) setUniversities(value ?? partners);
   }), []);
-  return <div className="content-card-grid partner-grid">{universities.map((item, index) => <a className="content-card partner-card" href={appUrl(`/${item.slug}/`)} key={item.id || item.slug || index}>{item.image && <img src={appUrl(item.image)} alt={`${item.name} logo`} />}<span className="content-card-kicker">{item.city}</span><h3>{item.name}</h3><span className="content-card-link"><Editable id="partner-card-link" text="Explore university" editMode={editMode} as="span" /> <span aria-hidden="true">↗</span></span></a>)}</div>;
+  return <div className="content-card-grid partner-grid">{universities.map((item, index) => <a className="content-card partner-card" data-reveal key={item.id || item.slug || index} style={{ transitionDelay: `${index * 75}ms` }} href={appUrl(`/${item.slug}/`)}>{item.image && <img src={appUrl(item.image)} alt={`${item.name} logo`} />}<span className="content-card-kicker">{item.city}</span><h3>{item.name}</h3><span className="content-card-link"><Editable id="partner-card-link" text="Explore university" editMode={editMode} as="span" /> <span aria-hidden="true">↗</span></span></a>)}</div>;
 }
 
 function UniversityProfilePage({ profile, editMode }) {
@@ -111,11 +111,11 @@ function UniversityProfilePage({ profile, editMode }) {
 }
 
 function ArticleGrid({ editMode }) {
-  return <div className="content-card-grid article-grid">{articles.map((item) => <a className="content-card article-card" href={appUrl(`/${item.slug}/`)} key={item.slug}><span className="content-card-kicker"><Editable id={`article-${item.slug}-date`} text={item.date} editMode={editMode} as="span" /> · <Editable id="article-card-category" text="Student guide" editMode={editMode} as="span" /></span><Editable id={`article-${item.slug}-title`} text={item.title} editMode={editMode} as="h3" /><Editable id={`article-${item.slug}-excerpt`} text={item.excerpt} editMode={editMode} /><span className="content-card-link"><Editable id="article-card-link" text="Read article" editMode={editMode} as="span" /> <span aria-hidden="true">↗</span></span></a>)}</div>;
+  return <div className="content-card-grid article-grid">{articles.map((item, index) => <a className="content-card article-card" data-reveal key={item.slug} style={{ transitionDelay: `${index * 75}ms` }} href={appUrl(`/${item.slug}/`)}><span className="content-card-kicker"><Editable id={`article-${item.slug}-date`} text={item.date} editMode={editMode} as="span" /> · <Editable id="article-card-category" text="Student guide" editMode={editMode} as="span" /></span><Editable id={`article-${item.slug}-title`} text={item.title} editMode={editMode} as="h3" /><Editable id={`article-${item.slug}-excerpt`} text={item.excerpt} editMode={editMode} /><span className="content-card-link"><Editable id="article-card-link" text="Read article" editMode={editMode} as="span" /> <span aria-hidden="true">↗</span></span></a>)}</div>;
 }
 
 function SimpleCards({ items, editMode, id = 'support', category = 'STUDENT SUPPORT' }) {
-  return <div className="content-card-grid simple-card-grid">{items.map((item, index) => <article className="content-card simple-card" key={item.title}><span className="content-card-kicker"><Editable id={`${id}-${index}-number`} text={`0${index + 1}`} editMode={editMode} as="span" /> · <Editable id={`${id}-${index}-category`} text={category} editMode={editMode} as="span" /></span><Editable id={`${id}-${index}-title`} text={item.title} editMode={editMode} as="h3" /><Editable id={`${id}-${index}-text`} text={item.text} editMode={editMode} /></article>)}</div>;
+  return <div className="content-card-grid simple-card-grid">{items.map((item, index) => <article className="content-card simple-card" data-reveal key={item.title} style={{ transitionDelay: `${index * 75}ms` }}><span className="content-card-kicker"><Editable id={`${id}-${index}-number`} text={`0${index + 1}`} editMode={editMode} as="span" /> · <Editable id={`${id}-${index}-category`} text={category} editMode={editMode} as="span" /></span><Editable id={`${id}-${index}-title`} text={item.title} editMode={editMode} as="h3" /><Editable id={`${id}-${index}-text`} text={item.text} editMode={editMode} /></article>)}</div>;
 }
 
 export default function SitePage({ page, editMode }) {

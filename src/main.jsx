@@ -29,7 +29,7 @@ function Icon({ name, size = 18 }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-function EditableText({ id, value, editMode, as: Tag = 'span', className = '', children }) {
+function EditableText({ id, value, editMode, as: Tag = 'span', className = '', children, ...props }) {
   const [text, setText] = useState(() => getSiteCopy(id, value));
 
   useEffect(() => {
@@ -51,6 +51,7 @@ function EditableText({ id, value, editMode, as: Tag = 'span', className = '', c
 
   return (
     <Tag
+      {...props}
       className={className}
       contentEditable={editMode}
       suppressContentEditableWarning
@@ -179,7 +180,7 @@ function Hero({ editMode }) {
   return (
     <section className="hero-section">
       <div className="container hero-grid">
-        <div className="hero-copy">
+        <div className="hero-copy" data-reveal="left">
           <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="hero-eyebrow" value={siteContent.hero.eyebrow} editMode={editMode} /></div>
           <h1><EditableText id="hero-title-1" value={siteContent.hero.titleLineOne} editMode={editMode} as="span" /><br /><EditableText id="hero-title-2" value={siteContent.hero.titleLineTwo} editMode={editMode} as="span" className="accent-text" /></h1>
           <EditableText id="hero-description" value={siteContent.hero.description} editMode={editMode} as="p" className="hero-description" />
@@ -187,7 +188,7 @@ function Hero({ editMode }) {
           <p className="hero-signoff"><EditableText id="hero-signoff" value={siteContent.hero.signoff} editMode={editMode} /></p>
           <a className="button button-primary hero-cta" href="#contact"><EditableText id="hero-cta" value="Start your journey" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
         </div>
-        <div className="hero-side">
+        <div className="hero-side" data-reveal="right" style={{ transitionDelay: '100ms' }}>
           <div className="student-art"><div className="art-wash" /><img src={appUrl('/images/hero-student.png')} alt="Student holding a book" /></div>
           <InquiryForm editMode={editMode} />
         </div>
@@ -202,7 +203,7 @@ function HighlightCards({ editMode }) {
   return (
     <section className="highlights-section" id="stories">
       <div className="container highlights-grid">
-        {siteContent.highlights.map((item, index) => <article className="highlight-card" key={item.title}>
+        {siteContent.highlights.map((item, index) => <article className="highlight-card" data-reveal key={item.title} style={{ transitionDelay: `${index * 75}ms` }}>
           <span className="highlight-number">{icons[index]}</span>
           <div><EditableText id={`highlight-${index}-title`} value={item.title} editMode={editMode} as="h3" /><EditableText id={`highlight-${index}-text`} value={item.text} editMode={editMode} as="p" /></div>
           <span className="highlight-arrow"><Icon name="arrow" size={17} /></span>
@@ -216,8 +217,8 @@ function IntroSection({ editMode }) {
   return (
     <section className="intro-section section-pad" id="about">
       <div className="container intro-grid">
-        <div className="intro-mark"><div className="intro-mark-ring"><span>G</span></div><span className="mark-caption"><EditableText id="intro-mark-caption" value="STUDY SMART, DREAM BIG" editMode={editMode} as="span" /></span></div>
-        <div className="intro-copy">
+        <div className="intro-mark" data-reveal="left"><div className="intro-mark-ring"><span>G</span></div><span className="mark-caption"><EditableText id="intro-mark-caption" value="STUDY SMART, DREAM BIG" editMode={editMode} as="span" /></span></div>
+        <div className="intro-copy" data-reveal="right" style={{ transitionDelay: '100ms' }}>
           <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="intro-eyebrow" value="About GEMS Group Services" editMode={editMode} /></div>
           <EditableText id="intro-title" value={siteContent.intro.title} editMode={editMode} as="h2" />
           <EditableText id="intro-body" value={siteContent.intro.body} editMode={editMode} as="p" />
@@ -233,11 +234,11 @@ function ServicesSection({ editMode }) {
     <section className="services-section section-pad" id="services">
       <div className="container">
         <div className="section-heading split-heading">
-          <div><div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="services-kicker" value="Student-centred support" editMode={editMode} /></div><EditableText id="services-title" value="Guidance at every step" editMode={editMode} as="h2" /></div>
-          <EditableText id="services-intro" value="From academic exploration to application follow-up, we help make the next steps easier to understand." editMode={editMode} as="p" />
+          <div data-reveal="left"><div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="services-kicker" value="Student-centred support" editMode={editMode} /></div><EditableText id="services-title" value="Guidance at every step" editMode={editMode} as="h2" /></div>
+          <EditableText id="services-intro" value="From academic exploration to application follow-up, we help make the next steps easier to understand." editMode={editMode} as="p" data-reveal="right" style={{ transitionDelay: '100ms' }} />
         </div>
         <div className="service-grid">
-          {siteContent.services.map((service, index) => <article className="service-card" key={service.title}>
+          {siteContent.services.map((service, index) => <article className="service-card" data-reveal key={service.title} style={{ transitionDelay: `${index * 80}ms` }}>
             <div className="service-visual"><img src={appUrl(service.image)} alt="" /><span className="service-index">0{index + 1}</span></div>
             <div className="service-copy"><EditableText id={`service-${index}-title`} value={service.title} editMode={editMode} as="h3" /><EditableText id={`service-${index}-text`} value={service.text} editMode={editMode} as="p" /><a href="#contact" aria-label={`Ask us about ${service.title}`}><Icon name="arrow" size={17} /></a></div>
           </article>)}
@@ -251,14 +252,14 @@ function AchievementSection({ editMode }) {
   return (
     <section className="achievement-section section-pad">
       <div className="container achievement-grid">
-        <div className="achievement-copy">
+        <div className="achievement-copy" data-reveal="left">
           <div className="eyebrow eyebrow-light"><span className="eyebrow-line" /> <EditableText id="achievement-kicker" value="A clear student journey" editMode={editMode} /></div>
           <EditableText id="achievement-title" value={siteContent.achievements.title} editMode={editMode} as="h2" />
           <EditableText id="achievement-body" value={siteContent.achievements.body} editMode={editMode} as="p" />
           <a href="#contact" className="button button-light"><EditableText id="achievement-cta" value="Talk to GEMS" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
         </div>
-        <div className="metrics-grid">
-          {siteContent.achievements.metrics.map((metric, index) => <div className="metric-card" key={metric.label}><span className="metric-value"><EditableText id={`metric-${index}-value`} value={metric.value} editMode={editMode} /></span><EditableText id={`metric-${index}-label`} value={metric.label} editMode={editMode} as="span" className="metric-label" /></div>)}
+        <div className="metrics-grid" data-reveal="right" style={{ transitionDelay: '120ms' }}>
+          {siteContent.achievements.metrics.map((metric, index) => <div className="metric-card" key={metric.label} style={{ transitionDelay: `${index * 90}ms` }}><span className="metric-value"><EditableText id={`metric-${index}-value`} value={metric.value} editMode={editMode} /></span><EditableText id={`metric-${index}-label`} value={metric.label} editMode={editMode} as="span" className="metric-label" /></div>)}
           <div className="metric-note"><span className="metric-note-symbol">✳</span><EditableText id="metric-note" value="Personalized, organized follow-up" editMode={editMode} as="span" /></div>
         </div>
       </div>
@@ -273,12 +274,12 @@ function UniversitiesSection({ editMode }) {
     <section className="universities-section section-pad" id="universities">
       <div className="container">
         <div className="section-heading centered-heading">
-          <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="universities-kicker" value="Explore academic options" editMode={editMode} /></div>
+          <div className="eyebrow" data-reveal><span className="eyebrow-line" /> <EditableText id="universities-kicker" value="Explore academic options" editMode={editMode} /></div>
           <EditableText id="universities-title" value="Explore institution profiles" editMode={editMode} as="h2" />
           <EditableText id="universities-subtitle" value="Compare study options and use each institution’s official channels to confirm current program and admission details." editMode={editMode} as="p" />
         </div>
         <div className="university-grid">
-          {universities.map((university, index) => <a className="university-card" key={university.id || index} href={appUrl(university.href || '/universities/')}>
+          {universities.map((university, index) => <a className="university-card" data-reveal key={university.id || index} href={appUrl(university.href || '/universities/')} style={{ transitionDelay: `${index * 65}ms` }}>
             <div className="university-logo">{university.image && <img src={appUrl(university.image)} alt={`${university.name} logo`} />}</div>
             <div className="university-info"><div><h3>{university.name}</h3><span>{university.city}</span></div><span className="circle-arrow"><Icon name="arrow" size={16} /></span></div>
           </a>)}
@@ -303,11 +304,11 @@ function TestimonialsSection({ editMode }) {
     <section className="testimonials-section section-pad" id="testimonials">
       <div className="container">
         <div className="section-heading split-heading testimonials-heading">
-          <div><div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="testimonials-kicker" value="Student stories" editMode={editMode} /></div><EditableText id="testimonials-title" value="A little encouragement goes a long way" editMode={editMode} as="h2" /></div>
+          <div data-reveal="left"><div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="testimonials-kicker" value="Student stories" editMode={editMode} /></div><EditableText id="testimonials-title" value="A little encouragement goes a long way" editMode={editMode} as="h2" /></div>
           {testimonials.length > 3 && <div className="slider-controls"><button onClick={() => move(-1)} aria-label="Previous testimonials">‹</button><button onClick={() => move(1)} aria-label="Next testimonials">›</button></div>}
         </div>
         <div className="testimonial-grid">
-          {items.map(({ person, personIndex }) => <article className="testimonial-card" key={person.id || personIndex}>
+          {items.map(({ person, personIndex }, index) => <article className="testimonial-card" data-reveal key={person.id || personIndex} style={{ transitionDelay: `${index * 85}ms` }}>
             <div className="quote-mark">“</div>
             <p>{person.quote}</p>
             <div className="testimonial-person">{person.image ? <img src={appUrl(person.image)} alt="" /> : <span className="testimonial-avatar">{person.name?.trim()?.charAt(0)?.toUpperCase() || '?'}</span>}<div><strong>{person.name}</strong><span>{person.course}</span></div><span className="quote-stars" aria-label="5 out of 5 stars">★★★★★</span></div>
@@ -322,7 +323,7 @@ function TestimonialsSection({ editMode }) {
 function ContactSection({ editMode }) {
   return (
     <section className="contact-section" id="contact">
-      <div className="container contact-panel">
+      <div className="container contact-panel" data-reveal>
         <div className="contact-copy">
           <div className="eyebrow eyebrow-light"><span className="eyebrow-line" /> <EditableText id="contact-kicker" value="Let’s talk about your future" editMode={editMode} /></div>
           <EditableText id="contact-title" value="Ready to take the next step?" editMode={editMode} as="h2" />
@@ -342,7 +343,7 @@ function ContactSection({ editMode }) {
 function Footer({ editMode }) {
   return (
     <footer className="site-footer">
-      <div className="container footer-grid">
+      <div className="container footer-grid" data-reveal>
         <div className="footer-brand">
           <a href={appUrl('/')}><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /></a>
           <EditableText id="footer-description" value="An education consultancy in Birgunj, Nepal, supporting informed academic choices, admission guidance, and institutional engagement." editMode={editMode} as="p" />
@@ -359,7 +360,47 @@ function App() {
   const editMode = false;
 
   const currentPath = appPath(window.location.pathname);
-  if (currentPath.replace(/\/+$/, '') === '/crm') {
+  const isCrmPath = currentPath.replace(/\/+$/, '') === '/crm';
+  useEffect(() => {
+    if (isCrmPath || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const targets = Array.from(document.querySelectorAll('[data-reveal]'));
+    if (!targets.length) return undefined;
+
+    const pageRoot = document.documentElement;
+    pageRoot.classList.add('motion-enabled');
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach((target) => target.classList.add('is-visible'));
+      return () => pageRoot.classList.remove('motion-enabled');
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -36px 0px' });
+    const observeTargets = (elements) => elements.forEach((target) => {
+      if (!(target instanceof Element) || !target.matches('[data-reveal]') || target.classList.contains('is-visible')) return;
+      observer.observe(target);
+    });
+    observeTargets(targets);
+    const additions = new MutationObserver((records) => {
+      records.forEach((record) => record.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        observeTargets([node, ...node.querySelectorAll('[data-reveal]')]);
+      }));
+    });
+    additions.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      additions.disconnect();
+      pageRoot.classList.remove('motion-enabled');
+    };
+  }, [currentPath, isCrmPath]);
+
+  if (isCrmPath) {
     if (CRM) return <React.Suspense fallback={<main className="crm-unavailable">Loading…</main>}><CRM /></React.Suspense>;
     return <main className="crm-unavailable" role="status">Page not found.</main>;
   }
