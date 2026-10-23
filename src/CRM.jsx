@@ -76,7 +76,7 @@ function AttendancePanel({ counselors, counselorId, isAdmin }) {
 
   return <section className="crm-attendance-view" aria-labelledby="crm-attendance-title">
     <div className="crm-title-row crm-attendance-title-row">
-      <div><span className="crm-kicker">KRISHNA FOUNDATION · TEAM</span><h1 id="crm-attendance-title">{isAdmin ? 'Counselor attendance' : 'My attendance'}</h1><p>Daily login time is counted toward an 8-hour attendance target.</p></div>
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · TEAM</span><h1 id="crm-attendance-title">{isAdmin ? 'Counselor attendance' : 'My attendance'}</h1><p>Daily login time is counted toward an 8-hour attendance target.</p></div>
       <label className="crm-attendance-date">Attendance date<input type="date" value={selectedDate} onChange={(event) => { if (event.target.value) setSelectedDate(event.target.value); }} /></label>
     </div>
     <div className="crm-attendance-target-note"><span className="crm-attendance-target-icon">◷</span><div><strong>Daily target: 8 hours</strong><p>Time is totaled by local calendar day. Sign out when you finish so your end time is recorded.</p></div></div>
@@ -240,7 +240,7 @@ function CounselorManager({ counselors }) {
 
   return <section aria-labelledby="counselors-title">
     <div className="crm-title-row">
-      <div><span className="crm-kicker">KRISHNA FOUNDATION · TEAM</span><h1 id="counselors-title">Counselor access</h1><p>Create sign-in credentials and choose which CRM sections each counselor can use.</p></div>
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · TEAM</span><h1 id="counselors-title">Counselor access</h1><p>Create sign-in credentials and choose which CRM sections each counselor can use.</p></div>
     </div>
     <form className="crm-counselor-manager" onSubmit={submit}>
       <div className="crm-counselor-manager-head"><div><h2>Three counselor accounts</h2><p>Each counselor sees assigned leads, enabled sections, and their own attendance.</p></div><span>Admin only</span></div>
@@ -341,7 +341,7 @@ function CRMWorkspace({ session, onLogout }) {
         {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>}
         {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
-          <div><span className="crm-kicker">KRISHNA FOUNDATION · ADMISSIONS</span><h1>{isAdmin ? 'Lead management' : `${currentCounselor?.name || 'Your'} leads`}</h1><p>{isAdmin ? 'Keep every enquiry moving toward the right university.' : 'Only leads assigned to your counselor account are shown here.'}</p></div>
+          <div><span className="crm-kicker">GEMS GROUP SERVICES · ADMISSIONS</span><h1>{isAdmin ? 'Lead management' : `${currentCounselor?.name || 'Your'} leads`}</h1><p>{isAdmin ? 'Keep every enquiry moving toward the right university.' : 'Only leads assigned to your counselor account are shown here.'}</p></div>
           {isAdmin && <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}><span aria-hidden="true">＋</span> Add lead</button>}
         </div>
 
@@ -409,7 +409,7 @@ function CRMLogin({ onAuthenticated }) {
     <header className="crm-header"><div className="crm-header-inner"><a className="crm-brand" href={appUrl('/')} aria-label="GEMS Group Services CRM"><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /><span className="crm-brand-divider" /><span className="crm-brand-label">CRM</span></a><a className="crm-website-link" href={appUrl('/')}>View website <span aria-hidden="true">↗</span></a></div></header>
     <main className="crm-auth-main">
       <form className="crm-auth-card" onSubmit={submit}>
-        <span className="crm-kicker">KRISHNA FOUNDATION · CRM</span>
+        <span className="crm-kicker">GEMS GROUP SERVICES · CRM</span>
         <h1>{hasAdmin ? 'Sign in to your CRM' : 'Set up your CRM login'}</h1>
         <p>{hasAdmin ? 'Sign in with your admin or counselor ID. Access depends on the permissions set by the admin.' : 'Create the admin login for this browser to manage counselor accounts, leads, and website access.'}</p>
         {!hasAdmin && <div className="crm-auth-notice"><strong>First-time setup</strong><span>Your admin account is saved only in this browser. Choose a password you will remember.</span></div>}

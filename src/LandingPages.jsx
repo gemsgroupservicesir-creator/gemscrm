@@ -111,7 +111,7 @@ export function LandingPageManager() {
 
   return <section className="crm-landing-manager" aria-labelledby="landing-builder-title">
     <div className="crm-title-row crm-editor-title-row">
-      <div><span className="crm-kicker">KRISHNA FOUNDATION · CAMPAIGNS</span><h1 id="landing-builder-title">Landing page builder</h1><p>Create a focused campaign page with a form that adds enquiries to your CRM.</p></div>
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · CAMPAIGNS</span><h1 id="landing-builder-title">Landing page builder</h1><p>Create a focused campaign page with a form that adds enquiries to your CRM.</p></div>
       <button className="crm-primary-button" type="button" onClick={() => { setEditing(newLandingPage()); setNotice(''); setError(''); }}>＋ Create landing page</button>
     </div>
     <div className="crm-landing-layout">
@@ -176,7 +176,7 @@ export function LandingPageView({ page }) {
   const [formError, setFormError] = useState('');
   const preview = new URLSearchParams(window.location.search).get('preview') === '1';
 
-  if (!page.published && !preview) return <main className="landing-unpublished"><h1>This campaign page is not published</h1><p>Return to the Krishna Foundation website or sign in to the CRM to preview the page.</p><a href={appUrl('/')}>Return to website</a></main>;
+  if (!page.published && !preview) return <main className="landing-unpublished"><h1>This campaign page is not published</h1><p>Return to the GEMS Group Services website or sign in to the CRM to preview the page.</p><a href={appUrl('/')}>Return to website</a></main>;
 
   async function submit(event) {
     event.preventDefault();
@@ -220,7 +220,7 @@ export function LandingPageView({ page }) {
     <header className="landing-header"><a href={appUrl('/')} aria-label="GEMS Group Services home"><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /></a><span>{preview && !page.published ? 'Preview · Draft' : 'Free student guidance'}</span></header>
     <section className="landing-hero"><div className="landing-copy"><span className="landing-eyebrow">{page.eyebrow}</span><h1>{page.headline}</h1><p>{page.description}</p><a className="landing-cta" href="#lead-form">{page.buttonLabel} <span aria-hidden="true">→</span></a><div className="landing-trust"><span>✓</span> Personal support from first enquiry to admission</div>{page.campaignImage && <img className="landing-campaign-image" src={appUrl(page.campaignImage)} alt={`${page.name || 'Campaign'} picture`} />}</div>
       <form className="landing-form" id="lead-form" onSubmit={submit}>
-        <span className="landing-form-kicker">KRISHNA FOUNDATION · INDIA ADMISSIONS</span><h2>{page.formTitle}</h2><p>Share your details and our counsellors will get in touch.</p>
+        <span className="landing-form-kicker">GEMS GROUP SERVICES · INDIA ADMISSIONS</span><h2>{page.formTitle}</h2><p>Share your details and our counsellors will get in touch.</p>
         <p className="landing-required-note">Fields marked * are required.</p>
         <label><span className="landing-field-label">Full name <i>*</i></span><input name="name" autoComplete="name" placeholder="Your name" required /></label>
         <label><span className="landing-field-label">Gmail address <i>*</i></span><input name="email" type="email" autoComplete="email" placeholder="you@gmail.com" required /></label>
@@ -234,6 +234,6 @@ export function LandingPageView({ page }) {
         <small>Your details are used to respond to this enquiry.</small>
       </form>
     </section>
-    <footer className="landing-footer"><span>Krishna Foundation</span><a href="mailto:krishnaconsultnepal@gmail.com">krishnaconsultnepal@gmail.com</a><a href="tel:+977014795410">+977 01-4795410</a></footer>
+    <footer className="landing-footer"><span>GEMS Group Services</span></footer>
   </main>;
 }

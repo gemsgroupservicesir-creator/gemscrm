@@ -1,6 +1,6 @@
-# Krishna Foundation site
+# GEMS Group Services site
 
-An editable React recreation of Krishna Foundation's website at [krishna.edu.np](https://krishna.edu.np/) with a connected local lead-management dashboard. The responsive site keeps its images in `public/images` so the preview does not rely on the original site being available. It includes the home page, About, Contact, Universities, Scholarships, student guides, six university profiles, and seven article routes. The live site timed out during this update, so the university and article pages use the content currently indexed for the original site and the page archive has not been exhaustively reproduced.
+An editable React site for GEMS Group Services with a connected lead-management dashboard. The responsive site keeps its images in `public/images` so the preview does not rely on external assets. It includes the home page, About, Contact, Universities, Scholarships, student guides, six university profiles, and seven article routes.
 
 ## Run it locally
 

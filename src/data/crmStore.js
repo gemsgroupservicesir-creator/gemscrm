@@ -74,7 +74,7 @@ export function exportLeadsCsv(leads, counselors = []) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `krishna-foundation-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `gems-group-services-leads-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }

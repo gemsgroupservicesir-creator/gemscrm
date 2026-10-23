@@ -197,7 +197,7 @@ export default function WebsiteEditor() {
 
   return <section className="crm-editor" aria-labelledby="crm-editor-title">
     <div className="crm-title-row crm-editor-title-row">
-      <div><span className="crm-kicker">KRISHNA FOUNDATION · WEBSITE</span><h1 id="crm-editor-title">Website editor</h1><p>Update website copy and manage home page content here.</p></div>
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · WEBSITE</span><h1 id="crm-editor-title">Website editor</h1><p>Update website copy and manage home page content here.</p></div>
       <a className="crm-secondary-button crm-preview-link" href={appUrl(pageLinks[selected.id] || '/')} target="_blank" rel="noreferrer">Preview page <span aria-hidden="true">↗</span></a>
     </div>
     <div className="crm-editor-layout">
@@ -228,6 +228,6 @@ export default function WebsiteEditor() {
         <div className="crm-editor-actions"><button className="crm-secondary-button" type="button" onClick={restoreSection}>Restore this page</button><span>{changedCount ? `${changedCount} unsaved ${changedCount === 1 ? 'change' : 'changes'}` : 'All changes saved'}</span><button className="crm-primary-button" type="submit">Save changes</button></div>
       </form>
     </div>
-    <p className="crm-privacy-note">Changes and uploaded images are saved in this browser. Updating the live krishna.edu.np site requires its authenticated publishing connection.</p>
+    <p className="crm-privacy-note">Changes and uploaded images are saved in this browser. Publishing to the live website requires its authenticated publishing connection.</p>
   </section>;
 }

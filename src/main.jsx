@@ -6,8 +6,10 @@ import { resolveLandingPage } from './data/landingPages.js';
 import { faculties, siteContent } from './data/siteContent.js';
 import { addLead } from './data/crmStore.js';
 import { appPath, appUrl } from './data/siteUrl.js';
-import { getSiteCopy, readSiteCollection, saveSiteCopy, subscribeToSiteCollections, subscribeToSiteCopy } from './data/siteCopy.js';
+import { getSiteCopy, readSiteCollection, saveSiteCopy, sanitizeStoredWebsiteContent, subscribeToSiteCollections, subscribeToSiteCopy } from './data/siteCopy.js';
 import './styles.css';
+
+sanitizeStoredWebsiteContent();
 
 const crmEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_CRM === 'true';
 const CRM = crmEnabled ? React.lazy(() => import('./CRM.jsx')) : null;
@@ -71,16 +73,13 @@ function useSiteCollection(id, fallback) {
 
 function Header({ editMode }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const phone = getSiteCopy('contact-phone', siteContent.contact.phone);
-  const email = getSiteCopy('contact-email', siteContent.contact.email);
 
   return (
     <>
       <div className="contact-bar">
         <div className="container contact-bar-inner">
           <div className="contact-bar-links">
-            <a href={`tel:${phone.replaceAll(' ', '')}`}><Icon name="phone" size={15} /> <EditableText id="contact-phone" value={siteContent.contact.phone} editMode={editMode} /></a>
-            <a href={`mailto:${email}`}><Icon name="mail" size={15} /> <EditableText id="contact-email" value={siteContent.contact.email} editMode={editMode} /></a>
+            <span>Study guidance for your next step</span>
           </div>
           <a className="top-consult" href={appUrl('/contact-us/')}><EditableText id="header-top-consult" value="Free consultation" editMode={editMode} /> <Icon name="arrow" size={14} /></a>
         </div>
@@ -218,7 +217,7 @@ function IntroSection({ editMode }) {
       <div className="container intro-grid">
         <div className="intro-mark"><div className="intro-mark-ring"><span>K</span></div><span className="mark-caption"><EditableText id="intro-mark-caption" value="YOUR DREAM, OUR MISSION" editMode={editMode} as="span" /></span></div>
         <div className="intro-copy">
-          <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="intro-eyebrow" value="About Krishna Foundation" editMode={editMode} /></div>
+          <div className="eyebrow"><span className="eyebrow-line" /> <EditableText id="intro-eyebrow" value="About GEMS Group Services" editMode={editMode} /></div>
           <EditableText id="intro-title" value={siteContent.intro.title} editMode={editMode} as="h2" />
           <EditableText id="intro-body" value={siteContent.intro.body} editMode={editMode} as="p" />
           <a className="text-link" href="#services"><EditableText id="intro-link" value="Explore our services" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
@@ -320,8 +319,6 @@ function TestimonialsSection({ editMode }) {
 }
 
 function ContactSection({ editMode }) {
-  const phone = getSiteCopy('contact-phone', siteContent.contact.phone);
-  const email = getSiteCopy('contact-email', siteContent.contact.email);
   return (
     <section className="contact-section" id="contact">
       <div className="container contact-panel">
@@ -329,10 +326,10 @@ function ContactSection({ editMode }) {
           <div className="eyebrow eyebrow-light"><span className="eyebrow-line" /> <EditableText id="contact-kicker" value="Let’s talk about your future" editMode={editMode} /></div>
           <EditableText id="contact-title" value="Ready to take the next step?" editMode={editMode} as="h2" />
           <EditableText id="contact-text" value="Tell us what you want to study. Our counsellors will help you understand your options." editMode={editMode} as="p" />
-          <a className="contact-phone" href={`tel:${phone.replaceAll(' ', '')}`}><Icon name="phone" size={18} /> <EditableText id="contact-phone" value={siteContent.contact.phone} editMode={editMode} /></a>
+          <span className="contact-phone">GEMS Group Services</span>
         </div>
         <div className="contact-action">
-          <a className="button button-light" href={`mailto:${email}?subject=Study%20consultation`}><EditableText id="contact-email-cta" value="Write to us" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
+          <a className="button button-light" href={appUrl('/contact-us/')}><EditableText id="contact-form-cta" value="Send an enquiry" editMode={editMode} /> <Icon name="arrow" size={16} /></a>
           <EditableText id="contact-action-note" value="We’re happy to help you get started." editMode={editMode} as="span" />
         </div>
         <div className="contact-decoration" aria-hidden="true">K</div>
@@ -342,21 +339,17 @@ function ContactSection({ editMode }) {
 }
 
 function Footer({ editMode }) {
-  const phone = getSiteCopy('contact-phone', siteContent.contact.phone);
-  const email = getSiteCopy('contact-email', siteContent.contact.email);
-  const address = getSiteCopy('contact-address', siteContent.contact.address);
   return (
     <footer className="site-footer">
       <div className="container footer-grid">
         <div className="footer-brand">
           <a href={appUrl('/')}><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /></a>
           <EditableText id="footer-description" value="Nepal’s education consultancy for students aspiring to study in India. Helping you choose a path with confidence." editMode={editMode} as="p" />
-          <div className="social-links"><a href="https://www.facebook.com/krishnafoundationnepal" target="_blank" rel="noreferrer"><EditableText id="footer-facebook-label" value="Facebook" editMode={editMode} /></a><a href="https://www.instagram.com/krishna_foundation/" target="_blank" rel="noreferrer"><EditableText id="footer-instagram-label" value="Instagram" editMode={editMode} /></a></div>
         </div>
         <div className="footer-links"><h3><EditableText id="footer-explore-title" value="Explore" editMode={editMode} /></h3><a href={appUrl('/about-us/')}><EditableText id="footer-about-label" value="About us" editMode={editMode} /></a><a href={appUrl('/scholarships/')}><EditableText id="footer-services-label" value="Our services" editMode={editMode} /></a><a href={appUrl('/universities/')}><EditableText id="footer-universities-label" value="Universities" editMode={editMode} /></a><a href={appUrl('/#testimonials')}><EditableText id="footer-testimonials-label" value="Testimonials" editMode={editMode} /></a><a href={appUrl('/blogs/')}><EditableText id="footer-guides-label" value="Student guides" editMode={editMode} /></a></div>
-        <div className="footer-contact"><h3><EditableText id="footer-contact-title" value="Contact us" editMode={editMode} /></h3><a href={`mailto:${email}`}><Icon name="mail" size={16} /><EditableText id="contact-email" value={siteContent.contact.email} editMode={editMode} /></a><a href={`tel:${phone.replaceAll(' ', '')}`}><Icon name="phone" size={16} /><EditableText id="contact-phone" value={siteContent.contact.phone} editMode={editMode} /></a><p><Icon name="pin" size={16} /><EditableText id="contact-address" value={siteContent.contact.address} editMode={editMode} /></p></div>
+        <div className="footer-contact"><h3>Get guidance</h3><a href={appUrl('/contact-us/')}><Icon name="arrow" size={16} /> Send an enquiry</a><p>Tell us about your study plans through the enquiry form.</p></div>
       </div>
-      <div className="container footer-bottom"><EditableText id="footer-copyright" value="Krishna Foundation Pvt. Ltd. © 2026" editMode={editMode} as="span" /><a href={appUrl('/#home')}><EditableText id="footer-back-top" value="Back to top ↑" editMode={editMode} /></a><EditableText id="footer-tagline" value="Built for a bright next step." editMode={editMode} as="span" /></div>
+      <div className="container footer-bottom"><EditableText id="footer-copyright" value="GEMS Group Services © 2026" editMode={editMode} as="span" /><a href={appUrl('/#home')}><EditableText id="footer-back-top" value="Back to top ↑" editMode={editMode} /></a><EditableText id="footer-tagline" value="Built for a bright next step." editMode={editMode} as="span" /></div>
     </footer>
   );
 }

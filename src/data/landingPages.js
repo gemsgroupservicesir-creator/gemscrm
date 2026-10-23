@@ -1,10 +1,15 @@
+import { sanitizeWebsiteContent } from './siteCopy.js';
+
 const STORAGE_KEY = 'krishna-foundation-crm-landing-pages-v1';
 const CHANGE_EVENT = 'krishna-foundation-landing-pages-updated';
 
 export function readLandingPages() {
   try {
     const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]');
-    return Array.isArray(value) ? value : [];
+    if (!Array.isArray(value)) return [];
+    const clean = sanitizeWebsiteContent(value);
+    if (JSON.stringify(clean) !== JSON.stringify(value)) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    return clean;
   } catch {
     return [];
   }
@@ -14,7 +19,7 @@ export function saveLandingPage(page) {
   const pages = readLandingPages();
   const duplicate = pages.find((item) => item.slug === page.slug && item.id !== page.id);
   if (duplicate) throw new Error('That page link is already in use. Choose a different link.');
-  const next = { ...page, updatedAt: new Date().toISOString() };
+  const next = sanitizeWebsiteContent({ ...page, updatedAt: new Date().toISOString() });
   const existingIndex = pages.findIndex((item) => item.id === page.id);
   if (existingIndex === -1) pages.unshift(next);
   else pages[existingIndex] = next;
