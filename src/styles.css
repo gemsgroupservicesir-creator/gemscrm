@@ -863,3 +863,40 @@ img { max-width: 100%; }
   .landing-form { padding: 23px 19px; }
   .landing-footer { gap: 11px 18px; }
 }
+
+.crm-attendance-title-row { align-items: center; }
+.crm-attendance-date { display: grid; gap: 6px; color: #64758a; font-size: 10px; font-weight: 800; }
+.crm-attendance-date input { min-height: 39px; padding: 8px 10px; border: 1px solid #dfe6ed; border-radius: 6px; color: #263951; background: #fff; font: inherit; }
+.crm-attendance-target-note { display: flex; align-items: center; gap: 13px; margin: 0 0 18px; padding: 16px 18px; border: 1px solid #e2ebf5; border-radius: 9px; background: #f6f9fd; }
+.crm-attendance-target-icon { display: grid; flex: 0 0 auto; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #285c94; background: #e7f0fa; font-size: 21px; }
+.crm-attendance-target-note strong { color: #304b69; font-size: 12px; }
+.crm-attendance-target-note p { margin: 4px 0 0; color: #8190a0; font-size: 10px; line-height: 1.5; }
+.crm-attendance-table-wrap, .crm-attendance-sessions { overflow: hidden; border: 1px solid #e5ebf2; border-radius: 10px; background: #fff; box-shadow: 0 5px 18px rgba(25,52,83,.035); }
+.crm-attendance-table-wrap { overflow-x: auto; }
+.crm-attendance-table, .crm-attendance-log { width: 100%; border-collapse: collapse; text-align: left; }
+.crm-attendance-table { min-width: 760px; }
+.crm-attendance-table th, .crm-attendance-log th { padding: 12px 15px; color: #8492a3; background: #fbfcfd; font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.crm-attendance-table td, .crm-attendance-log td { padding: 14px 15px; border-top: 1px solid #edf0f4; color: #586c83; font-size: 11px; white-space: nowrap; }
+.crm-attendance-table td strong { color: #344b66; font-size: 11px; }
+.crm-attendance-duration { color: #263f5d !important; font-weight: 800; font-variant-numeric: tabular-nums; }
+.crm-attendance-progress { overflow: hidden; width: 125px; height: 6px; margin: 0 0 6px; border-radius: 999px; background: #edf1f5; }
+.crm-attendance-progress span { display: block; height: 100%; border-radius: inherit; background: #52926f; transition: width .25s ease; }
+.crm-attendance-status { color: #a2762b; font-size: 9px; font-weight: 800; }
+.crm-attendance-status.active { color: #2f679e; }
+.crm-attendance-status.complete { color: #347450; }
+.crm-attendance-live { color: #347450; font-size: 10px; font-weight: 800; }
+.crm-attendance-empty { padding: 27px 18px; border-top: 1px solid #edf0f4; color: #8996a6; font-size: 11px; text-align: center; }
+.crm-attendance-sessions { margin-top: 18px; }
+.crm-attendance-sessions .crm-panel-heading { padding-bottom: 16px; }
+.crm-attendance-log-wrap { overflow-x: auto; }
+.crm-attendance-log { min-width: 520px; }
+.crm-attendance-view > .crm-privacy-note { margin-top: 13px; }
+
+@media (max-width: 760px) {
+  .crm-attendance-title-row { gap: 12px; }
+  .crm-attendance-date { width: 100%; }
+  .crm-attendance-date input { width: 100%; }
+  .crm-attendance-target-note { align-items: flex-start; padding: 13px; }
+  .crm-attendance-table th, .crm-attendance-log th { padding-inline: 12px; }
+  .crm-attendance-table td, .crm-attendance-log td { padding-inline: 12px; }
+}

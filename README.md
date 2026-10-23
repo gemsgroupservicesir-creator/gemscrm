@@ -15,6 +15,8 @@ Open `/crm` or choose **CRM dashboard** from the site navigation to manage enqui
 
 The **Landing pages** section builds campaign pages with configurable copy, two color styles, and optional phone, course, and student-image fields. Forms always collect a name and email address. Uploaded images are resized before saving; leads show the image and selected course in the CRM. Publish a page to create a `/landing/<page-link>/` route. Draft previews do not save submissions.
 
+Counselors have an **Attendance** section that records sign-in and sign-out times, totals each local calendar day, and tracks progress toward an 8-hour target. Admins can view all three counselors; each counselor sees only their own attendance. Like the CRM itself, attendance is currently stored in this browser.
+
 Leads, landing pages, and website copy stay in this browser's local storage. This local login does not secure a live, shared CRM; collecting leads from public visitors or sharing campaign pages across devices requires a hosted backend and authenticated CRM endpoint.
 
 React is installed from the official npm packages. Its upstream source repository is [facebook/react on GitHub](https://github.com/facebook/react).

@@ -7,6 +7,7 @@ import WebsiteEditor from './WebsiteEditor.jsx';
 import { LandingPageManager } from './LandingPages.jsx';
 import { readLandingPages, saveLandingPage } from './data/landingPages.js';
 import { appUrl } from './data/siteUrl.js';
+import { ATTENDANCE_TARGET_MS, endCounselorAttendance, getAttendanceForDay, getLocalDayKey, readAttendance, subscribeToAttendance } from './data/crmAttendance.js';
 
 const statuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
 const activeStatuses = new Set(['New', 'Contacted', 'Follow-up', 'Application']);
@@ -25,6 +26,92 @@ function formatNoteDate(value) {
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || '?';
+}
+
+function formatDuration(milliseconds) {
+  const totalMinutes = Math.max(0, Math.floor(milliseconds / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+}
+
+function formatClock(value) {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(value);
+}
+
+function formatTimestamp(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(date);
+}
+
+function AttendancePanel({ counselors, counselorId, isAdmin }) {
+  const [sessions, setSessions] = useState(() => readAttendance());
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDayKey());
+  const [now, setNow] = useState(Date.now());
+  const dateIsToday = selectedDate === getLocalDayKey(new Date(now));
+  const visibleCounselors = isAdmin ? counselors : counselors.filter((counselor) => counselor.id === counselorId);
+
+  useEffect(() => subscribeToAttendance(setSessions), []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const dailySessions = useMemo(() => getAttendanceForDay(sessions, selectedDate, now), [sessions, selectedDate, now]);
+  const summaries = visibleCounselors.map((counselor) => {
+    const entries = dailySessions.filter((session) => session.counselorId === counselor.id);
+    const totalMs = entries.reduce((total, session) => total + session.durationMs, 0);
+    const firstLogin = entries.reduce((earliest, session) => !earliest || session.dayStartedAt < earliest ? session.dayStartedAt : earliest, null);
+    const lastEntry = entries.reduce((latest, session) => !latest || session.dayEndedAt > latest.dayEndedAt ? session : latest, null);
+    const active = entries.some((session) => session.active);
+    const targetMet = totalMs >= ATTENDANCE_TARGET_MS;
+    const status = targetMet ? '8-hour target met' : active && dateIsToday ? 'In progress' : totalMs ? 'Below target' : 'No session';
+    return { counselor, entries, totalMs, firstLogin, lastEntry, active, targetMet, status };
+  });
+  const sessionRows = dailySessions.filter((session) => isAdmin || session.counselorId === counselorId)
+    .sort((left, right) => new Date(left.loggedInAt) - new Date(right.loggedInAt));
+
+  return <section className="crm-attendance-view" aria-labelledby="crm-attendance-title">
+    <div className="crm-title-row crm-attendance-title-row">
+      <div><span className="crm-kicker">KRISHNA FOUNDATION · TEAM</span><h1 id="crm-attendance-title">{isAdmin ? 'Counselor attendance' : 'My attendance'}</h1><p>Daily login time is counted toward an 8-hour attendance target.</p></div>
+      <label className="crm-attendance-date">Attendance date<input type="date" value={selectedDate} onChange={(event) => { if (event.target.value) setSelectedDate(event.target.value); }} /></label>
+    </div>
+    <div className="crm-attendance-target-note"><span className="crm-attendance-target-icon">◷</span><div><strong>Daily target: 8 hours</strong><p>Time is totaled by local calendar day. Sign out when you finish so your end time is recorded.</p></div></div>
+
+    <div className="crm-attendance-table-wrap">
+      <table className="crm-attendance-table">
+        <thead><tr><th>Counselor</th><th>First login</th><th>Last logout</th><th>Time counted</th><th>Attendance</th></tr></thead>
+        <tbody>{summaries.map(({ counselor, totalMs, firstLogin, lastEntry, active, targetMet, status }) => {
+          const percent = Math.min(100, Math.round((totalMs / ATTENDANCE_TARGET_MS) * 100));
+          return <tr key={counselor.id}>
+            <td><strong>{counselor.name}</strong></td>
+            <td>{firstLogin ? formatClock(firstLogin) : '—'}</td>
+            <td>{active && dateIsToday ? <span className="crm-attendance-live">Signed in</span> : lastEntry ? formatClock(lastEntry.dayEndedAt) : '—'}</td>
+            <td className="crm-attendance-duration">{formatDuration(totalMs)}</td>
+            <td><div className="crm-attendance-progress" role="progressbar" aria-label={`${counselor.name} attendance`} aria-valuemin="0" aria-valuemax="8" aria-valuenow={Math.min(8, totalMs / 3_600_000)}><span style={{ width: `${percent}%` }} /></div><span className={`crm-attendance-status ${targetMet ? 'complete' : active ? 'active' : ''}`}>{status}</span></td>
+          </tr>;
+        })}</tbody>
+      </table>
+      {!summaries.length && <div className="crm-attendance-empty">Counselor accounts will appear here.</div>}
+    </div>
+
+    <section className="crm-attendance-sessions" aria-labelledby="crm-attendance-sessions-title">
+      <div className="crm-panel-heading"><div><h2 id="crm-attendance-sessions-title">Login and logout times</h2><p>{sessionRows.length ? `${sessionRows.length} session${sessionRows.length === 1 ? '' : 's'} on ${new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${selectedDate}T12:00:00`))}` : 'No sign-in sessions recorded for this date.'}</p></div></div>
+      {sessionRows.length > 0 && <div className="crm-attendance-log-wrap"><table className="crm-attendance-log">
+        <thead><tr>{isAdmin && <th>Counselor</th>}<th>Login</th><th>Logout</th><th>Time counted that day</th></tr></thead>
+        <tbody>{sessionRows.map((session) => <tr key={session.id}>
+          {isAdmin && <td>{counselors.find((counselor) => counselor.id === session.counselorId)?.name || 'Counselor'}</td>}
+          <td>{formatTimestamp(session.loggedInAt)}</td>
+          <td>{session.active ? <span className="crm-attendance-live">Signed in</span> : formatTimestamp(session.loggedOutAt)}</td>
+          <td>{formatDuration(session.durationMs)}</td>
+        </tr>)}</tbody>
+      </table></div>}
+    </section>
+    <p className="crm-privacy-note">Attendance records are saved in this browser. They are not shared with counselors on other devices.</p>
+  </section>;
 }
 
 function LeadDialog({ lead, counselors, isAdmin, onClose }) {
@@ -125,10 +212,6 @@ function CounselorManager({ counselors }) {
   async function generateCredentials(counselorId) {
     setError('');
     const selected = draft.find((counselor) => counselor.id === counselorId);
-    if (!Object.values(selected?.permissions || {}).some(Boolean)) {
-      setError('Enable at least one CRM section before generating credentials.');
-      return;
-    }
     setBusyId(counselorId);
     try {
       saveCounselors(draft);
@@ -160,7 +243,7 @@ function CounselorManager({ counselors }) {
       <div><span className="crm-kicker">KRISHNA FOUNDATION · TEAM</span><h1 id="counselors-title">Counselor access</h1><p>Create sign-in credentials and choose which CRM sections each counselor can use.</p></div>
     </div>
     <form className="crm-counselor-manager" onSubmit={submit}>
-      <div className="crm-counselor-manager-head"><div><h2>Three counselor accounts</h2><p>Each counselor can only see leads assigned to them and sections you enable.</p></div><span>Admin only</span></div>
+      <div className="crm-counselor-manager-head"><div><h2>Three counselor accounts</h2><p>Each counselor sees assigned leads, enabled sections, and their own attendance.</p></div><span>Admin only</span></div>
       <div className="crm-counselor-account-list">{draft.map((counselor, index) => <article className="crm-counselor-account" key={counselor.id}>
         <div className="crm-counselor-account-heading"><span className="crm-counselor-number">{index + 1}</span><div><strong>{counselor.name || `Counselor ${index + 1}`}</strong><span>{counselor.username ? `Sign-in ID: ${counselor.username}` : 'No sign-in credentials'}</span></div><span className={`crm-counselor-account-status ${counselor.credential ? 'active' : ''}`}>{counselor.credential ? 'Enabled' : 'Not enabled'}</span></div>
         <div className="crm-counselor-fields crm-counselor-account-fields">
@@ -201,12 +284,21 @@ function CRMWorkspace({ session, onLogout }) {
 
   useEffect(() => subscribeToLeads(setLeads), []);
   useEffect(() => subscribeToCounselors(setCounselors), []);
+  useEffect(() => {
+    if (session.role !== 'counselor' || !session.attendanceSessionId) return undefined;
+    const closeAttendanceWhenLeaving = (event) => {
+      if (!event.persisted) endCounselorAttendance(session.attendanceSessionId);
+    };
+    window.addEventListener('pagehide', closeAttendanceWhenLeaving);
+    return () => window.removeEventListener('pagehide', closeAttendanceWhenLeaving);
+  }, [session.role, session.attendanceSessionId]);
 
   const currentCounselor = counselors.find((counselor) => counselor.id === session.counselorId);
   const tabs = [
     { id: 'leads', label: 'Leads', allowed: isAdmin || currentCounselor?.permissions?.leads },
     { id: 'website', label: 'Website editor', allowed: isAdmin || currentCounselor?.permissions?.website },
     { id: 'landing-pages', label: 'Landing pages', allowed: isAdmin || currentCounselor?.permissions?.landingPages },
+    { id: 'attendance', label: 'Attendance', allowed: true },
     { id: 'counselors', label: 'Counselors', allowed: isAdmin },
   ].filter((tab) => tab.allowed);
   const currentTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : (tabs[0]?.id || 'no-access');
@@ -247,7 +339,7 @@ function CRMWorkspace({ session, onLogout }) {
 
       <main className="crm-main">
         {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>}
-        {currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
+        {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
           <div><span className="crm-kicker">KRISHNA FOUNDATION · ADMISSIONS</span><h1>{isAdmin ? 'Lead management' : `${currentCounselor?.name || 'Your'} leads`}</h1><p>{isAdmin ? 'Keep every enquiry moving toward the right university.' : 'Only leads assigned to your counselor account are shown here.'}</p></div>
           {isAdmin && <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}><span aria-hidden="true">＋</span> Add lead</button>}

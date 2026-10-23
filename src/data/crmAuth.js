@@ -1,4 +1,5 @@
 import { readCounselors, updateCounselor } from './crmCounselors.js';
+import { endCounselorAttendance, isAttendanceSessionOpen, startCounselorAttendance } from './crmAttendance.js';
 
 const AUTH_KEY = 'krishna-foundation-crm-admin-v1';
 const SESSION_KEY = 'krishna-foundation-crm-session-v1';
@@ -34,8 +35,16 @@ export function crmGetSession() {
     if (session?.role === 'admin') return session;
     if (session?.role !== 'counselor' || !session.counselorId) return null;
     const account = readCounselors().find((counselor) => counselor.id === session.counselorId);
-    if (!account?.credential || session.credentialHash !== account.credential.hash || !Object.values(account.permissions || {}).some(Boolean)) return null;
-    return { role: 'counselor', counselorId: account.id };
+    if (!account?.credential || session.credentialHash !== account.credential.hash) {
+      endCounselorAttendance(session.attendanceSessionId);
+      return null;
+    }
+    if (!isAttendanceSessionOpen(session.attendanceSessionId)) {
+      session.attendanceSessionId = window.crypto?.randomUUID?.() || `attendance-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      startCounselorAttendance(account.id, session.attendanceSessionId);
+      saveSession(session);
+    }
+    return { ...session, role: 'counselor', counselorId: account.id };
   } catch {
     return null;
   }
@@ -74,11 +83,13 @@ export async function authenticateCrmCounselor(username, password) {
   try {
     const normalized = username.trim().toLowerCase();
     const account = readCounselors().find((counselor) => counselor.username.toLowerCase() === normalized && counselor.credential?.hash);
-    if (!account || !Object.values(account.permissions || {}).some(Boolean)) return false;
+    if (!account) return false;
     const credential = account.credential;
     const submitted = await hashPassword(password, decode(credential.salt));
     if (submitted !== credential.hash) return false;
-    saveSession({ role: 'counselor', counselorId: account.id, credentialHash: credential.hash });
+    const attendanceSessionId = window.crypto?.randomUUID?.() || `attendance-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    startCounselorAttendance(account.id, attendanceSessionId);
+    saveSession({ role: 'counselor', counselorId: account.id, credentialHash: credential.hash, attendanceSessionId });
     return true;
   } catch {
     return false;
@@ -119,5 +130,12 @@ export function deleteCounselorCredentials(counselorId) {
 }
 
 export function logoutCrmAdmin() {
+  try {
+    const stored = window.sessionStorage.getItem(SESSION_KEY);
+    const session = stored && stored !== 'authenticated' ? JSON.parse(stored) : null;
+    if (session?.role === 'counselor') endCounselorAttendance(session.attendanceSessionId);
+  } catch {
+    // Clear an unreadable session as well; it cannot be resumed safely.
+  }
   window.sessionStorage.removeItem(SESSION_KEY);
 }
