@@ -619,15 +619,12 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-counselor-account-heading > div > span { overflow-wrap: anywhere; color: #8996a6; font-size: 9px; }
 .crm-counselor-account-status { margin-left: auto; padding: 5px 8px; border-radius: 99px; color: #8a6a29; background: #fcf4e2; font-size: 9px; font-weight: 800; white-space: nowrap; }
 .crm-counselor-account-status.active { color: #347450; background: #eaf6ef; }
-.crm-counselor-account-fields { grid-template-columns: minmax(160px, .7fr) minmax(0, 1.3fr); padding: 15px; }
+.crm-counselor-account-fields { grid-template-columns: minmax(160px, .7fr) minmax(190px, .9fr) minmax(220px, 1.4fr); padding: 15px; }
+.crm-counselor-credential-fields { display: grid; gap: 11px; }
 .crm-counselor-access { display: grid; gap: 9px; margin: 0; padding: 10px 12px 12px; border: 1px solid #e5ebf2; border-radius: 6px; }
 .crm-counselor-access legend { padding: 0 5px; color: #536a84; font-size: 10px; font-weight: 800; }
 .crm-counselor-access label { display: flex; align-items: center; gap: 8px; color: #60748a; font-size: 10px; font-weight: 600; }
 .crm-counselor-access input { width: 14px; min-height: 14px; margin: 0; accent-color: #2b64a2; }
-.crm-generated-credentials { display: grid; gap: 6px; margin: 0 15px 13px; padding: 12px; border: 1px solid #d9eadf; border-radius: 7px; color: #3a6f50; background: #f3faf5; font-size: 10px; }
-.crm-generated-credentials strong { font-size: 11px; }
-.crm-generated-credentials code { padding: 2px 5px; border-radius: 4px; color: #2d4c3a; background: #e5f2e9; font-size: 10px; user-select: all; }
-.crm-generated-credentials small { color: #799382; font-size: 9px; }
 .crm-counselor-account-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 15px 15px; }
 .crm-counselor-account-actions .crm-primary-button, .crm-counselor-account-actions .crm-secondary-button { min-height: 34px; font-size: 10px; }
 .crm-delete-credential { color: #a84242; }

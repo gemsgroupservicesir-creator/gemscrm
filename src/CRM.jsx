@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { coursesOfInterest } from './data/siteContent.js';
 import { addLead, exportLeadsCsv, readLeads, subscribeToLeads, updateLead } from './data/crmStore.js';
 import { readCounselors, saveCounselors, subscribeToCounselors } from './data/crmCounselors.js';
-import { authenticateCrmAdmin, authenticateCrmCounselor, createCrmAdmin, crmGetSession, crmHasAdmin, deleteCounselorCredentials, generateCounselorCredentials, logoutCrmAdmin } from './data/crmAuth.js';
+import { authenticateCrmAdmin, authenticateCrmCounselor, createCrmAdmin, crmGetSession, crmHasAdmin, deleteCounselorCredentials, setCounselorCredentials, logoutCrmAdmin } from './data/crmAuth.js';
 import WebsiteEditor from './WebsiteEditor.jsx';
 import { LandingPageManager } from './LandingPages.jsx';
 import { readLandingPages, saveLandingPage } from './data/landingPages.js';
@@ -198,8 +198,11 @@ function CounselorManager({ counselors }) {
   const [saved, setSaved] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
-  const [revealed, setRevealed] = useState({});
-  useEffect(() => setDraft(counselors), [counselors]);
+  const [credentialInputs, setCredentialInputs] = useState(() => Object.fromEntries(counselors.map((counselor) => [counselor.id, { username: counselor.username || '', password: '' }])));
+  useEffect(() => {
+    setDraft(counselors);
+    setCredentialInputs((current) => Object.fromEntries(counselors.map((counselor) => [counselor.id, { username: counselor.username || '', password: current[counselor.id]?.password || '' }])));
+  }, [counselors]);
 
   function submit(event) {
     event.preventDefault();
@@ -209,17 +212,27 @@ function CounselorManager({ counselors }) {
     clearUnavailableLandingRoutes(draft);
   }
 
-  async function generateCredentials(counselorId) {
+  async function saveCredentials(counselorId) {
     setError('');
-    const selected = draft.find((counselor) => counselor.id === counselorId);
+    const fields = credentialInputs[counselorId] || {};
+    if (String(fields.username || '').trim().length < 3) {
+      setError('Enter a sign-in ID with at least 3 characters.');
+      return;
+    }
+    if (String(fields.password || '').length < 10) {
+      setError('Enter a password with at least 10 characters.');
+      return;
+    }
     setBusyId(counselorId);
     try {
       saveCounselors(draft);
-      const credentials = await generateCounselorCredentials(counselorId);
-      setRevealed((current) => ({ ...current, [counselorId]: credentials }));
-      setSaved(false);
-    } catch (generationError) {
-      setError(generationError.message || 'Could not generate counselor credentials.');
+      const updated = await setCounselorCredentials(counselorId, fields.username, fields.password);
+      setDraft((items) => items.map((item) => item.id === counselorId ? { ...item, username: updated.username, credential: updated.credential } : item));
+      setCredentialInputs((current) => ({ ...current, [counselorId]: { username: updated.username, password: '' } }));
+      setSaved(true);
+      clearUnavailableLandingRoutes(readCounselors());
+    } catch (credentialError) {
+      setError(credentialError.message || 'Could not save counselor credentials.');
     } finally {
       setBusyId('');
     }
@@ -228,7 +241,7 @@ function CounselorManager({ counselors }) {
   function removeCredentials(counselor) {
     if (!window.confirm(`Delete sign-in credentials for ${counselor.name}? They will no longer be able to sign in.`)) return;
     deleteCounselorCredentials(counselor.id);
-    setRevealed((current) => { const next = { ...current }; delete next[counselor.id]; return next; });
+    setCredentialInputs((current) => ({ ...current, [counselor.id]: { username: '', password: '' } }));
     clearLandingRoutes(counselor.id);
     setSaved(false);
   }
@@ -240,7 +253,7 @@ function CounselorManager({ counselors }) {
 
   return <section aria-labelledby="counselors-title">
     <div className="crm-title-row">
-      <div><span className="crm-kicker">GEMS GROUP SERVICES · TEAM</span><h1 id="counselors-title">Counselor access</h1><p>Create sign-in credentials and choose which CRM sections each counselor can use.</p></div>
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · TEAM</span><h1 id="counselors-title">Counselor access</h1><p>Set each counselor’s sign-in ID and password, then choose which CRM sections they can use.</p></div>
     </div>
     <form className="crm-counselor-manager" onSubmit={submit}>
       <div className="crm-counselor-manager-head"><div><h2>Three counselor accounts</h2><p>Each counselor sees assigned leads, enabled sections, and their own attendance.</p></div><span>Admin only</span></div>
@@ -248,18 +261,21 @@ function CounselorManager({ counselors }) {
         <div className="crm-counselor-account-heading"><span className="crm-counselor-number">{index + 1}</span><div><strong>{counselor.name || `Counselor ${index + 1}`}</strong><span>{counselor.username ? `Sign-in ID: ${counselor.username}` : 'No sign-in credentials'}</span></div><span className={`crm-counselor-account-status ${counselor.credential ? 'active' : ''}`}>{counselor.credential ? 'Enabled' : 'Not enabled'}</span></div>
         <div className="crm-counselor-fields crm-counselor-account-fields">
           <label><span>Display name</span><input value={counselor.name} required maxLength={60} onChange={(event) => { setSaved(false); setDraft((items) => items.map((item) => item.id === counselor.id ? { ...item, name: event.target.value } : item)); }} /></label>
+          <div className="crm-counselor-credential-fields">
+            <label><span>Manual sign-in ID</span><input autoComplete="username" value={credentialInputs[counselor.id]?.username || ''} placeholder="Enter an ID or email" onChange={(event) => { setSaved(false); setCredentialInputs((current) => ({ ...current, [counselor.id]: { ...current[counselor.id], username: event.target.value } })); }} /></label>
+            <label><span>{counselor.credential ? 'New password' : 'Manual password'}</span><input type="password" autoComplete="new-password" value={credentialInputs[counselor.id]?.password || ''} placeholder="At least 10 characters" onChange={(event) => { setSaved(false); setCredentialInputs((current) => ({ ...current, [counselor.id]: { ...current[counselor.id], password: event.target.value } })); }} /></label>
+          </div>
           <fieldset className="crm-counselor-access"><legend>CRM access</legend>
             <label><input type="checkbox" checked={Boolean(counselor.permissions?.leads)} onChange={(event) => changePermission(counselor.id, 'leads', event.target.checked)} /> Leads assigned to this counselor</label>
             <label><input type="checkbox" checked={Boolean(counselor.permissions?.website)} onChange={(event) => changePermission(counselor.id, 'website', event.target.checked)} /> Website editor</label>
             <label><input type="checkbox" checked={Boolean(counselor.permissions?.landingPages)} onChange={(event) => changePermission(counselor.id, 'landingPages', event.target.checked)} /> Landing pages</label>
           </fieldset>
         </div>
-        {revealed[counselor.id] && <div className="crm-generated-credentials" role="status"><strong>Copy these credentials now</strong><span>Sign-in ID: <code>{revealed[counselor.id].username}</code></span><span>Password: <code>{revealed[counselor.id].password}</code></span><small>The password is shown once. Generate again if it is lost.</small></div>}
-        <div className="crm-counselor-account-actions"><button className="crm-primary-button" type="button" disabled={busyId === counselor.id} onClick={() => generateCredentials(counselor.id)}>{busyId === counselor.id ? 'Generating…' : counselor.credential ? 'Generate new ID & password' : 'Generate ID & password'}</button>{counselor.credential && <button className="crm-secondary-button crm-delete-credential" type="button" onClick={() => removeCredentials(counselor)}>Delete credentials</button>}</div>
+        <div className="crm-counselor-account-actions"><button className="crm-primary-button" type="button" disabled={busyId === counselor.id} onClick={() => saveCredentials(counselor.id)}>{busyId === counselor.id ? 'Saving…' : counselor.credential ? 'Save ID & password' : 'Set ID & password'}</button>{counselor.credential && <button className="crm-secondary-button crm-delete-credential" type="button" onClick={() => removeCredentials(counselor)}>Delete credentials</button>}</div>
       </article>)}</div>
       {error && <p className="crm-landing-error" role="alert">{error}</p>}
       <div className="crm-editor-actions">{saved && <span className="crm-editor-save-message" role="status">Access settings saved.</span>}<button className="crm-primary-button" type="submit">Save access settings</button></div>
-      <p className="crm-privacy-note">Counselor passwords are stored as salted hashes in this browser. This local CRM does not provide server-enforced security or shared accounts across devices.</p>
+      <p className="crm-privacy-note">Enter counselor IDs and passwords yourself. Passwords are stored as salted hashes in this browser. This local CRM does not provide server-enforced security or shared accounts across devices.</p>
     </form>
   </section>;
 }

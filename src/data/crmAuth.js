@@ -4,7 +4,6 @@ import { endCounselorAttendance, isAttendanceSessionOpen, startCounselorAttendan
 const AUTH_KEY = 'krishna-foundation-crm-admin-v1';
 const SESSION_KEY = 'krishna-foundation-crm-session-v1';
 const ITERATIONS = 120_000;
-const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
 
 function encode(bytes) {
   let binary = '';
@@ -96,30 +95,26 @@ export async function authenticateCrmCounselor(username, password) {
   }
 }
 
-function randomText(length) {
-  const bytes = window.crypto.getRandomValues(new Uint8Array(length));
-  return Array.from(bytes, (byte) => PASSWORD_ALPHABET[byte % PASSWORD_ALPHABET.length]).join('');
-}
-
-export async function generateCounselorCredentials(counselorId) {
+export async function setCounselorCredentials(counselorId, username, password) {
   const account = readCounselors().find((counselor) => counselor.id === counselorId);
   if (!account) throw new Error('Counselor role not found.');
-  const existingUsernames = new Set(readCounselors().map((counselor) => counselor.username.toLowerCase()));
+  const normalizedUsername = String(username || '').trim().toLowerCase();
+  const normalizedPassword = String(password || '');
+  if (normalizedUsername.length < 3) throw new Error('Enter a sign-in ID with at least 3 characters.');
+  if (normalizedPassword.length < 10) throw new Error('Enter a password with at least 10 characters.');
+  const duplicate = readCounselors().some((counselor) => counselor.id !== counselorId && counselor.username.toLowerCase() === normalizedUsername);
+  if (duplicate) throw new Error('That sign-in ID is already used by another counselor.');
+  let admin = null;
   try {
-    const admin = JSON.parse(window.localStorage.getItem(AUTH_KEY) || 'null');
-    if (admin?.username) existingUsernames.add(admin.username.toLowerCase());
+    admin = JSON.parse(window.localStorage.getItem(AUTH_KEY) || 'null');
   } catch {
-    // Ignore an unreadable admin record; the generated username remains random.
+    // Ignore an unreadable admin record; counselor uniqueness is still checked.
   }
-  let username;
-  do {
-    username = `counselor-${randomText(6).toLowerCase()}`;
-  } while (existingUsernames.has(username));
-  const password = randomText(16);
+  if (admin?.username && admin.username.toLowerCase() === normalizedUsername) throw new Error('That sign-in ID is already used by the admin.');
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
-  const credential = { salt: encode(salt), hash: await hashPassword(password, salt), iterations: ITERATIONS };
-  updateCounselor(counselorId, { username, credential });
-  return { username, password };
+  const credential = { salt: encode(salt), hash: await hashPassword(normalizedPassword, salt), iterations: ITERATIONS };
+  updateCounselor(counselorId, { username: normalizedUsername, credential });
+  return { username: normalizedUsername, credential };
 }
 
 export function deleteCounselorCredentials(counselorId) {
