@@ -539,6 +539,10 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-panel-heading h2 { margin: 0 0 5px; color: #1d3553; font-family: 'Avenir Next', Avenir, system-ui, sans-serif; font-size: 18px; }
 .crm-panel-heading p { margin: 0; color: #8996a6; font-size: 11px; }
 .crm-leads-panel-actions { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+.crm-hidden-file-input { display: none; }
+.crm-import-notice, .crm-import-error { margin: 0 24px 12px; padding: 9px 11px; border-radius: 6px; font-size: 10px; line-height: 1.5; }
+.crm-import-notice { color: #347450; background: #edf8f1; }
+.crm-import-error { color: #a84242; background: #fff1ef; }
 .crm-view-toggle { display: inline-flex; padding: 3px; border: 1px solid #e0e6ee; border-radius: 7px; background: #f7f9fc; }
 .crm-view-toggle button { min-height: 31px; padding: 0 11px; border: 0; border-radius: 5px; color: #748397; background: transparent; font-size: 10px; font-weight: 800; }
 .crm-view-toggle button.active { color: var(--blue); background: #fff; box-shadow: 0 1px 4px rgba(25,52,83,.12); }

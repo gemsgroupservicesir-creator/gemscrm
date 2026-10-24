@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { coursesOfInterest } from './data/siteContent.js';
-import { addLead, exportLeadsCsv, readLeads, subscribeToLeads, updateLead } from './data/crmStore.js';
+import { addLead, exportLeadsCsv, importLeadsCsv, readLeads, subscribeToLeads, updateLead } from './data/crmStore.js';
 import { readCounselors, saveCounselors, subscribeToCounselors } from './data/crmCounselors.js';
 import { authenticateCrmAdmin, authenticateCrmCounselor, createCrmAdmin, crmGetSession, crmHasAdmin, deleteCounselorCredentials, setCounselorCredentials, logoutCrmAdmin } from './data/crmAuth.js';
 import WebsiteEditor from './WebsiteEditor.jsx';
@@ -343,6 +343,9 @@ function CRMWorkspace({ session, onLogout }) {
   const [dialog, setDialog] = useState(null);
   const [activeTab, setActiveTab] = useState('leads');
   const [leadView, setLeadView] = useState('board');
+  const importInputRef = useRef(null);
+  const [importNotice, setImportNotice] = useState('');
+  const [importError, setImportError] = useState('');
   const isAdmin = session.role === 'admin';
 
   useEffect(() => subscribeToLeads(setLeads), []);
@@ -391,6 +394,22 @@ function CRMWorkspace({ session, onLogout }) {
     updateLead(id, { assignedCounselorId });
   }
 
+  async function importLeadFile(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setImportNotice('');
+    setImportError('');
+    try {
+      const result = importLeadsCsv(await file.text(), counselors, isAdmin ? '' : session.counselorId, isAdmin);
+      setImportNotice(`Imported ${result.imported} ${result.imported === 1 ? 'lead' : 'leads'}${result.skipped ? ` · skipped ${result.skipped} invalid or duplicate ${result.skipped === 1 ? 'row' : 'rows'}` : ''}.`);
+    } catch (error) {
+      setImportError(error.message || 'Could not import this CSV file.');
+    } finally {
+      input.value = '';
+    }
+  }
+
   return (
     <div className="crm-app">
       <header className="crm-header">
@@ -416,11 +435,13 @@ function CRMWorkspace({ session, onLogout }) {
         </section>
 
         <section className="crm-leads-panel">
-          <div className="crm-panel-heading"><div><h2>Enquiries</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'saved in this browser' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Board</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>List</button></div><button className="crm-export-button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
+          <div className="crm-panel-heading"><div><h2>Enquiries</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'saved in this browser' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Board</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>List</button></div><input ref={importInputRef} className="crm-hidden-file-input" type="file" accept=".csv,text/csv" onChange={importLeadFile} /><button className="crm-export-button" type="button" onClick={() => importInputRef.current?.click()}>Import CSV</button><button className="crm-export-button" type="button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
           <div className="crm-toolbar">
             <label className="crm-search"><span aria-hidden="true">⌕</span><input aria-label="Search leads" placeholder="Search name, email, phone…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
             <label className="crm-filter"><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All leads</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
           </div>
+          {importNotice && <p className="crm-import-notice" role="status">{importNotice}</p>}
+          {importError && <p className="crm-import-error" role="alert">{importError}</p>}
 
           {filteredLeads.length ? leadView === 'board' ? <LeadKanbanBoard leads={filteredLeads} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} /> : <div className="crm-table-wrap"><table className="crm-table"><thead><tr><th>Student</th><th>Contact & interest</th><th>Source</th><th>Assigned counselor</th><th>Status</th><th>Notes</th><th>Received</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filteredLeads.map((lead) => <LeadRow key={lead.id} lead={lead} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} />)}</tbody></table></div> : <div className="crm-empty"><div className="crm-empty-icon">✦</div><h3>{accessibleLeads.length ? 'No matching enquiries' : isAdmin ? 'Your enquiry pipeline starts here' : 'No leads assigned yet'}</h3><p>{accessibleLeads.length ? 'Try another name or status filter.' : isAdmin ? 'When a student submits the website enquiry form, their details will be added to this list.' : 'Ask your administrator to route a landing page to your counselor account.'}</p>{accessibleLeads.length ? <button className="crm-secondary-button" onClick={() => { setSearch(''); setStatusFilter('All leads'); }}>Clear filters</button> : isAdmin ? <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}>Add your first lead</button> : null}</div>}
         </section>
