@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { coursesOfInterest } from './data/siteContent.js';
 import { addLead, readLeads, subscribeToLeads } from './data/crmStore.js';
 import { readCounselors, subscribeToCounselors } from './data/crmCounselors.js';
@@ -21,10 +22,33 @@ export function LandingPageManager() {
   const [editing, setEditing] = useState(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState('');
+
+  const qrShareUrl = editing?.slug
+    ? new URL(`${appUrl(`/landing/${slugify(editing.slug)}/`)}#lead-form`, window.location.origin).toString()
+    : '';
+  const isSavedPublishedPage = Boolean(editing && pages.some((page) => page.id === editing.id && page.published && page.slug === slugify(editing.slug)));
 
   useEffect(() => subscribeToLandingPages(setPages), []);
   useEffect(() => subscribeToLeads(setLeads), []);
   useEffect(() => subscribeToCounselors(setCounselors), []);
+  useEffect(() => {
+    let active = true;
+    setQrDataUrl('');
+    setQrError('');
+    if (!editing?.qrEnabled || !isSavedPublishedPage || !qrShareUrl) {
+      setQrLoading(false);
+      return () => { active = false; };
+    }
+    setQrLoading(true);
+    QRCode.toDataURL(qrShareUrl, { width: 320, margin: 2, errorCorrectionLevel: 'Q', color: { dark: '#202b72', light: '#ffffff' } })
+      .then((dataUrl) => { if (active) setQrDataUrl(dataUrl); })
+      .catch(() => { if (active) setQrError('Could not create a QR code for this page.'); })
+      .finally(() => { if (active) setQrLoading(false); });
+    return () => { active = false; };
+  }, [editing?.id, editing?.slug, editing?.published, editing?.qrEnabled, isSavedPublishedPage, qrShareUrl]);
 
   function change(key, value) {
     setEditing((current) => ({ ...current, [key]: value }));
@@ -138,6 +162,16 @@ export function LandingPageManager() {
           <label className="crm-editor-field">Assign new leads to<select value={counselors.some((counselor) => counselor.id === editing.assignedCounselorId && counselor.username && counselor.credential && counselor.permissions?.leads) ? editing.assignedCounselorId : ''} onChange={(event) => change('assignedCounselorId', event.target.value)}><option value="">Leave unassigned</option>{counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads).map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name} · {counselor.username}</option>)}</select><small>Every enquiry from this page will be assigned automatically to this counselor.</small></label>
           <div className="crm-editor-field crm-campaign-image-field"><span>Campaign picture</span><label className="crm-campaign-image-control">Choose an image<input type="file" accept="image/*" onChange={uploadCampaignPicture} /><small>JPG, PNG, or another image under 5 MB.</small></label>{editing.campaignImage && <div className="crm-campaign-image-preview"><img src={appUrl(editing.campaignImage)} alt={`${editing.name || 'Campaign'} picture preview`} /><button className="crm-collection-remove" type="button" onClick={() => change('campaignImage', '')}>Remove picture</button></div>}</div>
         </div>
+        <section className="crm-landing-qr" aria-labelledby="landing-qr-title">
+          <div className="crm-landing-qr-copy"><h3 id="landing-qr-title">Optional student QR code</h3><p>Let students scan a code to open this campaign and jump to its enquiry form.</p><label><input type="checkbox" checked={Boolean(editing.qrEnabled)} onChange={(event) => change('qrEnabled', event.target.checked)} /> Create a QR code for this page</label></div>
+          {editing.qrEnabled && <div className="crm-landing-qr-preview">
+            {!isSavedPublishedPage && <p>Save and publish this campaign to create its QR code.</p>}
+            {qrLoading && <p>Creating QR code…</p>}
+            {qrError && <p className="crm-landing-error" role="alert">{qrError}</p>}
+            {qrDataUrl && <><img src={qrDataUrl} alt={`QR code for ${editing.name || 'campaign page'}`} /><a className="crm-secondary-button" href={qrDataUrl} download={`${slugify(editing.slug) || 'campaign'}-qr.png`}>Download QR code</a><span>{qrShareUrl}</span></>}
+          </div>}
+          <p className="crm-landing-qr-note">This version saves campaign pages and form submissions in the current browser. Students on other devices will need shared campaign storage and a server connection for their enquiries to reach your CRM.</p>
+        </section>
         <fieldset className="crm-landing-fields"><legend>Lead form fields</legend><p>Name and Gmail address are always required. Add or remove extra details, and choose whether each is required.</p><div className="crm-landing-field-options">
           <div className="crm-landing-field-option"><label><input type="checkbox" checked={editing.fields.includes('phone')} onChange={() => toggleField('phone')} /> Phone number</label>{editing.fields.includes('phone') && <label className="crm-required-option"><input type="checkbox" checked={editing.phoneRequired !== false} onChange={(event) => change('phoneRequired', event.target.checked)} /> Required</label>}</div>
           <div className="crm-landing-field-option"><label><input type="checkbox" checked={editing.fields.includes('faculty')} onChange={() => toggleField('faculty')} /> Course of interest</label>{editing.fields.includes('faculty') && <label className="crm-required-option"><input type="checkbox" checked={editing.facultyRequired !== false} onChange={(event) => change('facultyRequired', event.target.checked)} /> Required</label>}</div>
@@ -175,6 +209,12 @@ export function LandingPageView({ page }) {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const preview = new URLSearchParams(window.location.search).get('preview') === '1';
+
+  useEffect(() => {
+    if (window.location.hash !== '#lead-form') return undefined;
+    const frame = window.requestAnimationFrame(() => document.getElementById('lead-form')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [page.slug]);
 
   if (!page.published && !preview) return <main className="landing-unpublished"><h1>This campaign page is not published</h1><p>Return to the GEMS Group Services website or sign in to the CRM to preview the page.</p><a href={appUrl('/')}>Return to website</a></main>;
 

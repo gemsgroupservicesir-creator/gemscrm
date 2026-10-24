@@ -73,6 +73,7 @@ export function newLandingPage() {
     customFields: [],
     assignedCounselorId: '',
     published: false,
+    qrEnabled: false,
     createdAt: now,
     updatedAt: now,
   };
