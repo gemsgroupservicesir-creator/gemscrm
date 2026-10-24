@@ -9,37 +9,30 @@ export const DEFAULT_COUNSELORS = [
 
 export function readCounselors() {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]');
-    return DEFAULT_COUNSELORS.map((counselor) => {
-      const match = Array.isArray(saved) && saved.find((item) => item.id === counselor.id);
-      return {
-        ...counselor,
-        ...(match || {}),
-        id: counselor.id,
-        name: String(match?.name || counselor.name),
-        username: String(match?.username || ''),
-        credential: match?.credential || null,
-        permissions: { ...counselor.permissions, ...(match?.permissions || {}) },
-      };
-    });
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === null) return DEFAULT_COUNSELORS.map((counselor) => ({ ...counselor, permissions: { ...counselor.permissions } }));
+    const saved = JSON.parse(stored);
+    if (!Array.isArray(saved)) return DEFAULT_COUNSELORS.map((counselor) => ({ ...counselor, permissions: { ...counselor.permissions } }));
+    return saved.filter((item) => item && typeof item.id === 'string' && item.id).map((item) => ({
+      id: item.id,
+      name: String(item.name || 'Counselor'),
+      username: String(item.username || ''),
+      credential: item.credential || null,
+      permissions: { leads: true, website: false, landingPages: false, ...(item.permissions || {}) },
+    }));
   } catch {
-    return DEFAULT_COUNSELORS.map((counselor) => ({ ...counselor }));
+    return DEFAULT_COUNSELORS.map((counselor) => ({ ...counselor, permissions: { ...counselor.permissions } }));
   }
 }
 
 export function saveCounselors(counselors) {
-  const saved = DEFAULT_COUNSELORS.map((counselor) => {
-    const match = counselors.find((item) => item.id === counselor.id);
-    return {
-      ...counselor,
-      ...match,
-      id: counselor.id,
-      name: String(match?.name || counselor.name).trim() || counselor.name,
-      username: String(match?.username || ''),
-      credential: match?.credential || null,
-      permissions: { ...counselor.permissions, ...(match?.permissions || {}) },
-    };
-  });
+  const saved = counselors.filter((item) => item && typeof item.id === 'string' && item.id).map((item) => ({
+    id: item.id,
+    name: String(item.name || 'Counselor').trim() || 'Counselor',
+    username: String(item.username || '').trim().toLowerCase(),
+    credential: item.credential || null,
+    permissions: { leads: true, website: false, landingPages: false, ...(item.permissions || {}) },
+  }));
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   window.dispatchEvent(new Event(UPDATE_EVENT));
   return saved;

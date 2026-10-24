@@ -152,6 +152,12 @@ export function updateLead(id, changes) {
   return leads.find((lead) => lead.id === id);
 }
 
+export function unassignLeadsFromCounselor(counselorId) {
+  const leads = readLeads();
+  const updated = leads.map((lead) => lead.assignedCounselorId === counselorId ? { ...lead, assignedCounselorId: '' } : lead);
+  if (updated.some((lead, index) => lead !== leads[index])) writeLeads(updated);
+}
+
 export function subscribeToLeads(callback) {
   const refresh = () => callback(readLeads());
   window.addEventListener(UPDATE_EVENT, refresh);

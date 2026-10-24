@@ -639,7 +639,9 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-counselor-manager-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 21px 23px 17px; border-bottom: 1px solid #edf0f4; }
 .crm-counselor-manager-head h2 { margin: 0 0 5px; color: #1d3553; font-family: 'Avenir Next', Avenir, system-ui, sans-serif; font-size: 18px; }
 .crm-counselor-manager-head p { margin: 0; color: #8996a6; font-size: 11px; }
-.crm-counselor-manager-head > span { flex: 0 0 auto; padding: 6px 9px; border-radius: 99px; color: var(--blue-dark); background: #eef0ff; font-size: 9px; font-weight: 800; }
+.crm-counselor-manager-tools { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+.crm-counselor-manager-tools > span { padding: 6px 9px; border-radius: 99px; color: var(--blue-dark); background: #eef0ff; font-size: 9px; font-weight: 800; }
+.crm-counselor-manager-tools .crm-primary-button { min-height: 34px; padding: 0 12px; font-size: 10px; }
 .crm-counselor-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 20px 23px; }
 .crm-counselor-fields label { display: grid; gap: 7px; color: #64758a; font-size: 10px; font-weight: 800; }
 .crm-counselor-fields input { width: 100%; min-height: 40px; padding: 9px 10px; border: 1px solid #dfe6ed; border-radius: 6px; outline: 0; color: #263951; background: #fff; font-size: 11px; }
@@ -664,6 +666,8 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-counselor-account-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 15px 15px; }
 .crm-counselor-account-actions .crm-primary-button, .crm-counselor-account-actions .crm-secondary-button { min-height: 34px; font-size: 10px; }
 .crm-delete-credential { color: #a84242; }
+.crm-delete-counselor { color: #a84242; }
+.crm-delete-counselor:disabled { cursor: not-allowed; opacity: .55; }
 .crm-lead-image-preview { display: flex; align-items: center; gap: 10px; margin: -5px 0 17px; color: #687a8f; font-size: 11px; font-weight: 700; }
 .crm-lead-image-preview img { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; }
 .crm-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 21px; }
@@ -894,7 +898,8 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
   .crm-counselor-account-heading { gap: 8px; padding: 10px; }
   .crm-counselor-account-status { padding-inline: 6px; font-size: 8px; }
   .crm-counselor-account-actions { padding-inline: 13px; }
-  .crm-counselor-manager-head { padding: 17px 15px 14px; }
+  .crm-counselor-manager-head { align-items: flex-start; flex-direction: column; padding: 17px 15px 14px; }
+  .crm-counselor-manager-tools { width: 100%; justify-content: space-between; }
   .crm-counselor-manager-head p { line-height: 1.5; }
   .crm-counselor-manager > .crm-privacy-note { padding-inline: 15px; }
   .crm-title-row.crm-editor-title-row { align-items: flex-start; }
