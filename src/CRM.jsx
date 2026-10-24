@@ -193,6 +193,52 @@ function LeadRow({ lead, counselors, isAdmin, onEdit, onStatusChange, onAssign }
   );
 }
 
+function LeadKanbanBoard({ leads, counselors, isAdmin, onEdit, onStatusChange, onAssign }) {
+  const [dropTarget, setDropTarget] = useState('');
+  const availableCounselors = counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads);
+
+  function startDragging(event, lead) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', lead.id);
+  }
+
+  function dropLead(event, status) {
+    event.preventDefault();
+    const leadId = event.dataTransfer.getData('text/plain');
+    if (leadId) onStatusChange(leadId, status);
+    setDropTarget('');
+  }
+
+  return <div className="crm-kanban-board" aria-label="Lead pipeline board">
+    {statuses.map((status) => {
+      const columnLeads = leads.filter((lead) => (lead.status || 'New') === status);
+      const statusClass = status.toLowerCase().replaceAll(/[^a-z]+/g, '-');
+      return <section className={`crm-kanban-column ${dropTarget === status ? 'is-drop-target' : ''}`} key={status} aria-labelledby={`kanban-${statusClass}`}>
+        <header className="crm-kanban-column-head"><h3 id={`kanban-${statusClass}`}>{status}</h3><span>{columnLeads.length}</span></header>
+        <div className="crm-kanban-column-body" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTarget(status); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropTarget(''); }} onDrop={(event) => dropLead(event, status)}>
+          {columnLeads.map((lead) => {
+            const noteCount = (lead.noteHistory?.length || 0) + (lead.notes ? 1 : 0);
+            const assignedCounselor = counselors.find((counselor) => counselor.id === lead.assignedCounselorId);
+            const leadStatusClass = (lead.status || 'New').toLowerCase().replaceAll(/[^a-z]+/g, '-');
+            return <article className="crm-kanban-card" key={lead.id} draggable onDragStart={(event) => startDragging(event, lead)} onDragEnd={() => setDropTarget('')}>
+              <div className="crm-kanban-card-head"><span className="crm-kanban-grip" aria-hidden="true">⠿</span><span className={`crm-kanban-stage status-${leadStatusClass}`}>{lead.status || 'New'}</span></div>
+              <div className="crm-kanban-person"><span className="crm-avatar">{lead.image ? <img src={appUrl(lead.image)} alt={`${lead.name}'s uploaded image`} /> : initials(lead.name)}</span><div><button type="button" className="crm-kanban-name" onClick={() => onEdit(lead)}>{lead.name}</button><span>{lead.email}</span></div></div>
+              <p className="crm-kanban-course">{lead.course || lead.faculty || 'Course not selected'}</p>
+              {lead.phone && <p className="crm-kanban-phone">{lead.phone}</p>}
+              <div className="crm-kanban-card-meta"><span>{formatDate(lead.createdAt)}</span><button type="button" className="crm-row-edit" onClick={() => onEdit(lead)}>Notes ({noteCount})</button></div>
+              <div className="crm-kanban-card-controls">
+                <label><span className="sr-only">Status for {lead.name}</span><select className={`crm-status-select status-${leadStatusClass}`} value={lead.status || 'New'} onChange={(event) => onStatusChange(lead.id, event.target.value)}>{statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
+                {isAdmin ? <label><span className="sr-only">Counselor for {lead.name}</span><select className="crm-assignee-select" value={availableCounselors.some((counselor) => counselor.id === lead.assignedCounselorId) ? lead.assignedCounselorId : ''} onChange={(event) => onAssign(lead.id, event.target.value)}><option value="">Unassigned</option>{availableCounselors.map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name}</option>)}</select></label> : <span className="crm-kanban-assignee">{assignedCounselor?.name || 'Assigned to you'}</span>}
+              </div>
+            </article>;
+          })}
+          {!columnLeads.length && <div className="crm-kanban-empty">Drop a lead here</div>}
+        </div>
+      </section>;
+    })}
+  </div>;
+}
+
 function CounselorManager({ counselors }) {
   const [draft, setDraft] = useState(counselors);
   const [saved, setSaved] = useState(false);
@@ -296,6 +342,7 @@ function CRMWorkspace({ session, onLogout }) {
   const [statusFilter, setStatusFilter] = useState('All leads');
   const [dialog, setDialog] = useState(null);
   const [activeTab, setActiveTab] = useState('leads');
+  const [leadView, setLeadView] = useState('board');
   const isAdmin = session.role === 'admin';
 
   useEffect(() => subscribeToLeads(setLeads), []);
@@ -329,7 +376,7 @@ function CRMWorkspace({ session, onLogout }) {
     const query = search.trim().toLowerCase();
     const assignedName = counselors.find((counselor) => counselor.id === lead.assignedCounselorId)?.name;
     const matchesSearch = !query || [lead.name, lead.email, lead.phone, lead.course, lead.faculty, lead.source, assignedName].some((item) => String(item || '').toLowerCase().includes(query));
-    const matchesStatus = statusFilter === 'All leads' || lead.status === statusFilter;
+    const matchesStatus = statusFilter === 'All leads' || (lead.status || 'New') === statusFilter;
     return matchesSearch && matchesStatus;
   }), [accessibleLeads, search, statusFilter, counselors]);
   const followUps = accessibleLeads.filter((lead) => lead.status === 'Follow-up').length;
@@ -369,13 +416,13 @@ function CRMWorkspace({ session, onLogout }) {
         </section>
 
         <section className="crm-leads-panel">
-          <div className="crm-panel-heading"><div><h2>Enquiries</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'saved in this browser' : 'assigned to this counselor'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><button className="crm-export-button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div>
+          <div className="crm-panel-heading"><div><h2>Enquiries</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'saved in this browser' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Board</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>List</button></div><button className="crm-export-button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
           <div className="crm-toolbar">
             <label className="crm-search"><span aria-hidden="true">⌕</span><input aria-label="Search leads" placeholder="Search name, email, phone…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
             <label className="crm-filter"><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All leads</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
           </div>
 
-          {filteredLeads.length ? <div className="crm-table-wrap"><table className="crm-table"><thead><tr><th>Student</th><th>Contact & interest</th><th>Source</th><th>Assigned counselor</th><th>Status</th><th>Notes</th><th>Received</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filteredLeads.map((lead) => <LeadRow key={lead.id} lead={lead} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} />)}</tbody></table></div> : <div className="crm-empty"><div className="crm-empty-icon">✦</div><h3>{accessibleLeads.length ? 'No matching enquiries' : isAdmin ? 'Your enquiry pipeline starts here' : 'No leads assigned yet'}</h3><p>{accessibleLeads.length ? 'Try another name or status filter.' : isAdmin ? 'When a student submits the website enquiry form, their details will be added to this list.' : 'Ask your administrator to route a landing page to your counselor account.'}</p>{accessibleLeads.length ? <button className="crm-secondary-button" onClick={() => { setSearch(''); setStatusFilter('All leads'); }}>Clear filters</button> : isAdmin ? <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}>Add your first lead</button> : null}</div>}
+          {filteredLeads.length ? leadView === 'board' ? <LeadKanbanBoard leads={filteredLeads} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} /> : <div className="crm-table-wrap"><table className="crm-table"><thead><tr><th>Student</th><th>Contact & interest</th><th>Source</th><th>Assigned counselor</th><th>Status</th><th>Notes</th><th>Received</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filteredLeads.map((lead) => <LeadRow key={lead.id} lead={lead} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} />)}</tbody></table></div> : <div className="crm-empty"><div className="crm-empty-icon">✦</div><h3>{accessibleLeads.length ? 'No matching enquiries' : isAdmin ? 'Your enquiry pipeline starts here' : 'No leads assigned yet'}</h3><p>{accessibleLeads.length ? 'Try another name or status filter.' : isAdmin ? 'When a student submits the website enquiry form, their details will be added to this list.' : 'Ask your administrator to route a landing page to your counselor account.'}</p>{accessibleLeads.length ? <button className="crm-secondary-button" onClick={() => { setSearch(''); setStatusFilter('All leads'); }}>Clear filters</button> : isAdmin ? <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}>Add your first lead</button> : null}</div>}
         </section>
         <p className="crm-privacy-note">Leads are stored in this browser only. Connect a secured server or CRM API to share records across devices or receive enquiries from the live WordPress website.</p>
         </>}
