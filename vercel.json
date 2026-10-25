@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
+  "buildCommand": "VITE_ENABLE_CRM=true npm run build",
   "outputDirectory": "dist",
   "rewrites": [
     {
