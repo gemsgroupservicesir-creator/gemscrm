@@ -230,6 +230,7 @@ export function LandingPageView({ page }) {
     const form = event.currentTarget;
     const data = new FormData(form);
     const selectedCourse = String(data.get('faculty') || '');
+    const website = String(data.get('website') || '');
     setSubmitting(true);
     try {
       const image = await compressLeadImage(data.get('image'));
@@ -246,6 +247,7 @@ export function LandingPageView({ page }) {
         course: selectedCourse,
         image,
         formAnswers,
+        website,
         source: `Landing page: /landing/${page.slug}/`,
       }, page.slug);
       setSent(true);
@@ -263,6 +265,7 @@ export function LandingPageView({ page }) {
       <form className="landing-form" id="lead-form" data-reveal="right" style={{ transitionDelay: '100ms' }} onSubmit={submit}>
         <span className="landing-form-kicker">GEMS GROUP SERVICES · STUDENT SUPPORT</span><h2>{page.formTitle}</h2><p>Share your details and our team will follow up with guidance.</p>
         <p className="landing-required-note">Fields marked * are required.</p>
+        <label className="lead-honeypot" aria-hidden="true">Leave this field empty<input name="website" type="text" tabIndex={-1} autoComplete="off" /></label>
         <label><span className="landing-field-label">Full name <i>*</i></span><input name="name" autoComplete="name" placeholder="Your name" required /></label>
         <label><span className="landing-field-label">Gmail address <i>*</i></span><input name="email" type="email" autoComplete="email" placeholder="you@gmail.com" required /></label>
         {page.fields.includes('phone') && <label><span className="landing-field-label">Phone number{page.phoneRequired !== false && <i>*</i>}</span><input name="phone" type="tel" autoComplete="tel" placeholder="+977" required={page.phoneRequired !== false} /></label>}

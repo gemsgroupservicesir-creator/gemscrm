@@ -148,7 +148,7 @@ function InquiryForm({ editMode }) {
     const data = new FormData(form);
     setBusy(true); setError(''); setSent(false);
     try {
-      await submitPublicLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('faculty') || ''), source: 'Website enquiry' });
+      await submitPublicLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('faculty') || ''), website: String(data.get('website') || ''), source: 'Website enquiry' });
       setSent(true); form.reset();
     } catch (submitError) { setError(submitError.message || 'We could not send your enquiry. Please try again.'); }
     finally { setBusy(false); }
@@ -162,6 +162,7 @@ function InquiryForm({ editMode }) {
         <EditableText id="form-intro" value="Share a few details and our team will guide you." editMode={editMode} as="p" />
       </div>
       <div className="form-fields">
+        <label className="lead-honeypot" aria-hidden="true">Leave this field empty<input name="website" type="text" tabIndex={-1} autoComplete="off" /></label>
         <label><EditableText id="form-label-name" value="Full name" editMode={editMode} as="span" /><input name="name" autoComplete="name" placeholder={getSiteCopy('form-placeholder-name', 'Your name')} required /></label>
         <label><EditableText id="form-label-email" value="Email address" editMode={editMode} as="span" /><input name="email" type="email" autoComplete="email" placeholder={getSiteCopy('form-placeholder-email', 'you@example.com')} required /></label>
         <label><EditableText id="form-label-phone" value="Phone number" editMode={editMode} as="span" /><input name="phone" type="tel" autoComplete="tel" placeholder={getSiteCopy('form-placeholder-phone', '+977')} required /></label>

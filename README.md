@@ -19,9 +19,11 @@ The **Landing pages** section builds campaign pages with configurable copy, two 
 
 Counselors have an **Attendance** section that records sign-in and sign-out times, totals each local calendar day, and tracks progress toward an 8-hour target. Admins can view all counselor attendance; each counselor sees only their own attendance.
 
+The API stores only hashed session tokens and scrypt-hashed passwords, sets secure HTTP-only sessions, checks counselor permissions on the server, throttles public forms and sign-in attempts, and restricts browser links to safe URL schemes. Vercel response headers add a content security policy and clickjacking protection.
+
 ## Connect the production database and first admin
 
-The Vercel deployment uses a Neon Postgres database in Singapore and a Node.js function at `/api/crm`. The function creates its tables automatically the first time it connects. The production project needs a database connection variable (`DATABASE_URL`, supplied by the Neon integration) and a private `CRM_BOOTSTRAP_TOKEN` environment variable.
+The Vercel deployment uses a Neon Postgres database in Singapore and a Node.js function at `/api/crm`. The function creates its tables automatically the first time it connects. First-admin setup needs a private `CRM_BOOTSTRAP_TOKEN`; remove that variable after the administrator is created. Keep the Neon database connection variable (`DATABASE_URL`) configured.
 
 1. In Vercel, connect a Neon Postgres resource to this project and the **Production** environment. Use the free plan unless the account owner chooses a paid plan.
 2. In **Project Settings → Environment Variables**, add `CRM_BOOTSTRAP_TOKEN` with a long, random value. Keep it out of Git and do not share it in the website source.
@@ -33,12 +35,12 @@ The database and bootstrap token must be connected before accepting real student
 
 React is installed from the official npm packages. Its upstream source repository is [facebook/react on GitHub](https://github.com/facebook/react).
 
-## Deploy with GitHub Pages
+## Static preview on GitHub Pages
 
 1. Create a GitHub repository and push this project to its `main` or `master` branch.
 2. In the repository, open **Settings → Pages** and set the publishing source to **GitHub Actions**.
 3. Open the **Actions** tab and wait for **Deploy site to GitHub Pages** to finish. GitHub will show the published URL in the workflow run and under **Settings → Pages**.
 
-The workflow builds the site for either a repository URL (`https://<account>.github.io/<repository>/`) or an account site (`https://<account>.github.io/`). It also publishes a fallback page so site routes continue to load when opened directly. The GitHub Pages build includes the `/crm` route but does not display a CRM link or public edit controls in the website navigation. Open `/crm` directly to reach the dashboard.
+The workflow builds the public website for either a repository URL (`https://<account>.github.io/<repository>/`) or an account site (`https://<account>.github.io/`). GitHub Pages is static hosting and does not run the CRM API. Use the Vercel deployment for `/crm`, campaign submissions, and any shared student records.
 
-**Before using it for real enquiries:** GitHub Pages hosts static files only. This app currently keeps leads, CRM accounts, campaign pages, and website edits in each visitor's browser storage. A public visitor's form submission will not appear in your CRM, and the browser-local CRM login is not a security boundary. Connect a hosted database and server-side login before using the CRM for sensitive shared data.
+Do not enter real student records on a GitHub Pages copy of the site.

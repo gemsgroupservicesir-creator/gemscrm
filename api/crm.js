@@ -1,9 +1,19 @@
 import { neon } from '@neondatabase/serverless';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createPublicLead, validLead } from '../lib/crmInput.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const SESSION_HOURS = 12;
+const DUMMY_PASSWORD_SALT = randomBytes(16).toString('hex');
+const DUMMY_PASSWORD_HASH = scryptSync(randomBytes(32).toString('base64url'), DUMMY_PASSWORD_SALT, 64).toString('hex');
+const GET_ACTIONS = new Set(['auth-status', 'public-content', 'public-landing-page', 'session', 'data']);
+const POST_ACTIONS = new Set([
+  'lead-submit', 'login', 'bootstrap', 'logout', 'lead-create', 'lead-update', 'lead-import', 'attendance-end',
+  'counselors-save', 'counselor-credentials', 'counselor-delete-credentials', 'counselor-delete',
+  'landing-page-save', 'landing-page-delete', 'site-content-save-many', 'site-content-remove-many', 'site-content-save', 'site-content-remove',
+]);
 let schemaPromise;
+let lastAbuseCleanup = 0;
 
 function json(res, status, value, headers = {}) {
   res.statusCode = status;
@@ -57,9 +67,14 @@ async function ensureSchema(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS crm_login_attempts_recent_idx ON crm_login_attempts (username_key, ip_key, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS crm_login_limits (
+      ip_key TEXT PRIMARY KEY, window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), count INTEGER NOT NULL DEFAULT 0
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_login_limits_window_idx ON crm_login_limits (window_started_at)`;
     await sql`CREATE TABLE IF NOT EXISTS crm_form_limits (
       ip_key TEXT PRIMARY KEY, window_started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), count INTEGER NOT NULL DEFAULT 0
     )`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_form_limits_window_idx ON crm_form_limits (window_started_at)`;
   })().catch((error) => { schemaPromise = undefined; throw error; });
   return schemaPromise;
 }
@@ -83,7 +98,9 @@ function cookieValue(req, name) {
   const cookies = String(req.headers.cookie || '').split(';');
   for (const item of cookies) {
     const [key, ...rest] = item.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
+    if (key === name) {
+      try { return decodeURIComponent(rest.join('=')); } catch { return ''; }
+    }
   }
   return '';
 }
@@ -152,31 +169,6 @@ async function createSession(sql, res, user) {
   return attendanceId;
 }
 
-function validLead(input, defaults = {}) {
-  const value = input && typeof input === 'object' ? input : {};
-  const name = String(value.name || '').trim().slice(0, 120);
-  const email = String(value.email || '').trim().slice(0, 254);
-  const phone = String(value.phone || '').trim().slice(0, 50);
-  if (!name || (!email && !phone)) fail(400, 'Enter the student name and an email address or phone number.');
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Enter a valid email address.');
-  if (typeof value.image === 'string' && value.image.length >= 750_000) fail(413, 'The uploaded student image is too large after processing. Try a smaller image.');
-  const image = typeof value.image === 'string' ? value.image : '';
-  return {
-    id: String(value.id || randomBytes(16).toString('hex')),
-    name, email, phone,
-    faculty: String(value.faculty || value.course || '').slice(0, 160),
-    course: String(value.course || value.faculty || '').slice(0, 160),
-    image,
-    source: String(value.source || defaults.source || 'Website enquiry').slice(0, 200),
-    notes: String(value.notes || '').slice(0, 6000),
-    noteHistory: Array.isArray(value.noteHistory) ? value.noteHistory.slice(-100) : [],
-    formAnswers: Array.isArray(value.formAnswers) ? value.formAnswers.slice(0, 50) : [],
-    assignedCounselorId: String(defaults.assignedCounselorId ?? value.assignedCounselorId ?? ''),
-    status: ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'].includes(value.status) ? value.status : 'New',
-    createdAt: value.createdAt || new Date().toISOString(),
-  };
-}
-
 async function putLead(sql, lead) {
   const emailKey = lead.email.trim().toLowerCase();
   const phoneKey = lead.phone.replace(/\D/g, '');
@@ -186,18 +178,53 @@ async function putLead(sql, lead) {
       email_key = EXCLUDED.email_key, phone_key = EXCLUDED.phone_key, data = EXCLUDED.data`;
 }
 
+async function insertLead(sql, lead) {
+  const emailKey = lead.email.trim().toLowerCase();
+  const phoneKey = lead.phone.replace(/\D/g, '');
+  await sql`INSERT INTO crm_leads (id, assigned_counselor_id, email_key, phone_key, data, created_at)
+    VALUES (${lead.id}, ${lead.assignedCounselorId}, ${emailKey}, ${phoneKey}, ${JSON.stringify(lead)}::jsonb, ${lead.createdAt})`;
+}
+
 function isSameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return false;
   try { return new URL(origin).host === req.headers.host; } catch { return false; }
 }
 
+function clientIp(req) {
+  const value = req.headers['x-vercel-forwarded-for'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || 'unknown';
+  return String(value).split(',')[0].trim().slice(0, 128) || 'unknown';
+}
+
+async function checkLoginRateLimit(sql, req) {
+  await cleanupAbuseRows(sql);
+  const ipKey = hash(clientIp(req)).slice(0, 40);
+  const rows = await sql`INSERT INTO crm_login_limits (ip_key, count, window_started_at)
+    VALUES (${ipKey}, 1, NOW()) ON CONFLICT (ip_key) DO UPDATE SET
+      count = CASE WHEN crm_login_limits.window_started_at < NOW() - INTERVAL '15 minutes' THEN 1 ELSE LEAST(crm_login_limits.count + 1, 121) END,
+      window_started_at = CASE WHEN crm_login_limits.window_started_at < NOW() - INTERVAL '15 minutes' THEN NOW() ELSE crm_login_limits.window_started_at END
+    RETURNING count`;
+  if (Number(rows[0]?.count || 0) > 120) fail(429, 'Too many requests from this network. Please wait 15 minutes before trying again.');
+}
+
+async function cleanupAbuseRows(sql) {
+  if (Date.now() - lastAbuseCleanup < 60 * 60 * 1000) return;
+  lastAbuseCleanup = Date.now();
+  try {
+    await sql`DELETE FROM crm_login_attempts WHERE created_at < NOW() - INTERVAL '1 day'`;
+    await sql`DELETE FROM crm_login_limits WHERE window_started_at < NOW() - INTERVAL '1 day'`;
+    await sql`DELETE FROM crm_form_limits WHERE window_started_at < NOW() - INTERVAL '1 day'`;
+  } catch {
+    lastAbuseCleanup = 0;
+  }
+}
+
 async function checkFormLimit(sql, req) {
-  const ip = String(req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
-  const ipHash = hash(ip).slice(0, 40);
+  await cleanupAbuseRows(sql);
+  const ipHash = hash(clientIp(req)).slice(0, 40);
   const result = await sql`INSERT INTO crm_form_limits (ip_key, count, window_started_at)
     VALUES (${ipHash}, 1, NOW()) ON CONFLICT (ip_key) DO UPDATE SET
-      count = CASE WHEN crm_form_limits.window_started_at < NOW() - INTERVAL '10 minutes' THEN 1 ELSE crm_form_limits.count + 1 END,
+      count = CASE WHEN crm_form_limits.window_started_at < NOW() - INTERVAL '10 minutes' THEN 1 ELSE LEAST(crm_form_limits.count + 1, 13) END,
       window_started_at = CASE WHEN crm_form_limits.window_started_at < NOW() - INTERVAL '10 minutes' THEN NOW() ELSE crm_form_limits.window_started_at END
     RETURNING count`;
   if (Number(result[0]?.count || 0) > 12) fail(429, 'Please wait before sending another enquiry.');
@@ -209,6 +236,8 @@ export default async function handler(req, res) {
     const url = new URL(req.url, `https://${req.headers.host || 'localhost'}`);
     const action = url.searchParams.get('action') || '';
     if (req.method === 'POST' && !isSameOrigin(req)) return json(res, 403, { error: 'Request origin could not be verified.' });
+    const allowedActions = req.method === 'GET' ? GET_ACTIONS : req.method === 'POST' ? POST_ACTIONS : null;
+    if (!allowedActions?.has(action)) return json(res, 404, { error: 'Not found.' });
     sql = await db();
 
     if (req.method === 'GET' && action === 'auth-status') {
@@ -240,7 +269,7 @@ export default async function handler(req, res) {
       if (String(body.website || '').trim()) return json(res, 200, { ok: true });
       await checkFormLimit(sql, req);
       let assignedCounselorId = '';
-      let source = String(body.source || 'Website enquiry');
+      let source = 'Website enquiry';
       if (body.slug) {
         const slug = String(body.slug).slice(0, 120);
         const pages = await sql`SELECT assigned_counselor_id, data FROM crm_landing_pages WHERE slug = ${slug} AND published = TRUE LIMIT 1`;
@@ -252,24 +281,28 @@ export default async function handler(req, res) {
           if (!valid[0]) assignedCounselorId = '';
         }
       }
-      const lead = validLead(body, { assignedCounselorId, source });
-      lead.assignedCounselorId = assignedCounselorId;
-      await putLead(sql, lead);
+      const lead = createPublicLead(body, { assignedCounselorId, source });
+      await insertLead(sql, lead);
       return json(res, 201, { ok: true });
     }
 
     if (req.method === 'POST' && action === 'login') {
       const body = parseBody(req);
       const username = String(body.username || '').trim().toLowerCase().slice(0, 120);
-      const ip = String(req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
-      const ipKey = hash(ip).slice(0, 40);
+      const ipKey = hash(clientIp(req)).slice(0, 40);
+      await checkLoginRateLimit(sql, req);
       const usernameKey = hash(username);
       const recent = await sql`SELECT COUNT(*)::int AS count FROM crm_login_attempts WHERE username_key = ${usernameKey} AND ip_key = ${ipKey} AND created_at > NOW() - INTERVAL '15 minutes'`;
       if (Number(recent[0]?.count || 0) >= 10) fail(429, 'Too many sign-in attempts. Please try again later.');
       const rows = await sql`SELECT id, username, role, name, permissions, password_salt, password_hash
         FROM crm_users WHERE LOWER(username) = ${username} AND disabled = FALSE LIMIT 1`;
       const userRow = rows[0];
-      const valid = userRow && passwordMatches(String(body.password || ''), userRow.password_salt, userRow.password_hash);
+      const passwordMatchesSubmitted = passwordMatches(
+        String(body.password || ''),
+        userRow?.password_salt || DUMMY_PASSWORD_SALT,
+        userRow?.password_hash || DUMMY_PASSWORD_HASH,
+      );
+      const valid = Boolean(userRow) && passwordMatchesSubmitted;
       await sql`INSERT INTO crm_login_attempts (username_key, ip_key, succeeded) VALUES (${usernameKey}, ${ipKey}, ${Boolean(valid)})`;
       if (!valid) fail(401, 'The sign-in ID or password is incorrect.');
       const user = safeUser(userRow);
@@ -281,8 +314,8 @@ export default async function handler(req, res) {
       const body = parseBody(req);
       const supplied = String(body.token || '');
       const expected = String(process.env.CRM_BOOTSTRAP_TOKEN || '');
-      const ip = String(req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
-      const ipKey = hash(ip).slice(0, 40), usernameKey = hash('first-admin-bootstrap');
+      const ipKey = hash(clientIp(req)).slice(0, 40), usernameKey = hash('first-admin-bootstrap');
+      await checkLoginRateLimit(sql, req);
       const attempts = await sql`SELECT COUNT(*)::int AS count FROM crm_login_attempts WHERE username_key = ${usernameKey} AND ip_key = ${ipKey} AND created_at > NOW() - INTERVAL '15 minutes'`;
       if (Number(attempts[0]?.count || 0) >= 10) fail(429, 'Too many setup attempts. Please try again later.');
       const suppliedBytes = Buffer.from(supplied), expectedBytes = Buffer.from(expected);
@@ -398,7 +431,8 @@ export default async function handler(req, res) {
               const assigned = await sql`SELECT id FROM crm_users WHERE id = ${lead.assignedCounselorId} AND role = 'counselor' AND disabled = FALSE AND COALESCE((permissions->>'leads')::boolean, false) = TRUE LIMIT 1`;
               if (!assigned[0]) lead.assignedCounselorId = '';
             }
-            await putLead(sql, lead);
+            lead.id = randomBytes(16).toString('hex');
+            await insertLead(sql, lead);
             imported += 1;
           } catch { skipped += 1; }
         }
