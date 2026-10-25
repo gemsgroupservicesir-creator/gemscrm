@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { compressLeadImage } from './data/imageUpload.js';
 import { getSiteEditorGroups } from './data/siteEditor.js';
-import { getSiteCopy, readSiteCollection, removeSiteCollection, removeSiteCopy, saveSiteCollection, saveSiteCopy, subscribeToSiteCollections } from './data/siteCopy.js';
+import { getSiteCopy, readSiteCollection, removeSiteCollection, removeSiteCopyBatch, saveSiteCollection, saveSiteCopyBatch, subscribeToSiteCollections } from './data/siteCopy.js';
 import { appUrl } from './data/siteUrl.js';
 
 const pageLinks = {
@@ -94,7 +94,7 @@ export default function WebsiteEditor() {
     }
   }
 
-  function saveSection(event) {
+  async function saveSection(event) {
     event.preventDefault();
     if (selected.collectionId) {
       const isProfile = selected.kind === 'university-profile';
@@ -133,29 +133,31 @@ export default function WebsiteEditor() {
       try {
         const normalized = isProfile ? normalizedProfiles : selected.kind === 'university' ? currentItems.map((item) => ({ ...item, href: safeLink(item.href) })) : currentItems;
         setCollections((current) => ({ ...current, [selected.collectionId]: normalized }));
-        saveSiteCollection(selected.collectionId, normalized);
+        await saveSiteCollection(selected.collectionId, normalized);
         setError('');
-        setNotice('Changes saved. They now appear on the website in this browser.');
-      } catch {
-        setError('Could not save this section. Try smaller images or remove an item.');
+        setNotice('Changes saved to the server and website.');
+      } catch (saveError) {
+        setError(saveError.message || 'Could not save this section. Try smaller images or remove an item.');
         setNotice('');
       }
       return;
     }
-    for (const field of currentFields) saveSiteCopy(field.id, currentValues[field.id] ?? field.value);
-    setError('');
-    setNotice('Changes saved. They now appear on the website in this browser.');
+    try {
+      await saveSiteCopyBatch(currentFields.map((field) => ({ id: field.id, value: currentValues[field.id] ?? field.value })));
+      setError('');
+      setNotice('Changes saved to the server and website.');
+    } catch (saveError) { setError(saveError.message || 'Could not save this page section.'); }
   }
 
-  function restoreSection() {
+  async function restoreSection() {
     if (selected.collectionId) {
-      removeSiteCollection(selected.collectionId);
+      await removeSiteCollection(selected.collectionId);
       setCollections((current) => ({ ...current, [selected.collectionId]: selected.defaultItems.map((item) => ({ ...item })) }));
       setNotice('This section has been restored to its original content.');
       setError('');
       return;
     }
-    for (const field of currentFields) removeSiteCopy(field.id);
+    await removeSiteCopyBatch(currentFields.map((field) => field.id));
     setValues((current) => ({ ...current, [selected.id]: Object.fromEntries(currentFields.map((field) => [field.id, field.value])) }));
     setNotice('This page section has been restored to its original copy.');
     setError('');
@@ -165,7 +167,7 @@ export default function WebsiteEditor() {
     const textField = (key, label, options = {}) => <label className="crm-editor-field" key={key}>{label}<input value={item[key] || ''} placeholder={options.placeholder || ''} onChange={(event) => updateItem(index, key, event.target.value)} /></label>;
     const imageField = <>
       {textField('image', 'Image path or URL', { placeholder: '/images/your-image.jpg or https://…' })}
-      <label className="crm-editor-field">Upload image<input type="file" accept="image/*" onChange={(event) => uploadItemImage(index, event.currentTarget.files?.[0])} /><small>Image is resized and saved in this browser. Maximum upload size: 5 MB.</small></label>
+      <label className="crm-editor-field">Upload image<input type="file" accept="image/*" onChange={(event) => uploadItemImage(index, event.currentTarget.files?.[0])} /><small>Image is resized before being saved to the server. Maximum upload size: 5 MB.</small></label>
       {item.image && <img className="crm-collection-preview" src={appUrl(item.image)} alt="Preview" />}
     </>;
 
@@ -209,7 +211,7 @@ export default function WebsiteEditor() {
             : (group.fields || []).filter((field) => getSiteCopy(field.id, field.value) !== field.value).length;
           return <button key={group.id} type="button" className={group.id === selected.id ? 'active' : ''} aria-current={group.id === selected.id ? 'page' : undefined} onClick={() => { setSelectedId(group.id); setNotice(''); setError(''); }}><span>{group.title}</span>{edited > 0 && <small>{edited}</small>}</button>;
         })}
-        <p>Content is saved locally and shared with the website pages in this browser.</p>
+        <p>Content is saved on the server and shared with website visitors.</p>
       </nav>
       <form className="crm-editor-form" onSubmit={saveSection}>
         <div className="crm-editor-form-head"><div><h2>{selected.title}</h2><p>{selected.description}</p></div>{savedCount > 0 && <span className="crm-edit-count">{savedCount} saved</span>}</div>
@@ -228,6 +230,6 @@ export default function WebsiteEditor() {
         <div className="crm-editor-actions"><button className="crm-secondary-button" type="button" onClick={restoreSection}>Restore this page</button><span>{changedCount ? `${changedCount} unsaved ${changedCount === 1 ? 'change' : 'changes'}` : 'All changes saved'}</span><button className="crm-primary-button" type="submit">Save changes</button></div>
       </form>
     </div>
-    <p className="crm-privacy-note">Changes and uploaded images are saved in this browser. Publishing to the live website requires its authenticated publishing connection.</p>
+    <p className="crm-privacy-note">Website content and uploaded images are saved in the secured database.</p>
   </section>;
 }

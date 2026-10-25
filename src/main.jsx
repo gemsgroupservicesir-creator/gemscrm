@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import SitePage, { resolveSitePage } from './PageContent.jsx';
 import { LandingPageView } from './LandingPages.jsx';
-import { resolveLandingPage } from './data/landingPages.js';
+import { fetchPublicLandingPage, loadPublicSiteContent } from './data/crmApi.js';
 import { faculties, siteContent } from './data/siteContent.js';
-import { addLead } from './data/crmStore.js';
+import { submitPublicLead } from './data/crmStore.js';
 import { appPath, appUrl } from './data/siteUrl.js';
 import { getSiteCopy, readSiteCollection, saveSiteCopy, sanitizeStoredWebsiteContent, subscribeToSiteCollections, subscribeToSiteCopy } from './data/siteCopy.js';
 import './styles.css';
@@ -42,8 +42,7 @@ function EditableText({ id, value, editMode, as: Tag = 'span', className = '', c
   function saveEdit(event) {
     const next = event.currentTarget.innerText.trim();
     if (next) {
-      saveSiteCopy(id, next);
-      setText(next);
+      saveSiteCopy(id, next).then(() => setText(next)).catch(() => setText(getSiteCopy(id, value)));
     } else {
       event.currentTarget.innerText = text;
     }
@@ -140,20 +139,19 @@ function UniversityRail({ editMode }) {
 
 function InquiryForm({ editMode }) {
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    addLead({
-      name: String(data.get('name') || ''),
-      email: String(data.get('email') || ''),
-      phone: String(data.get('phone') || ''),
-      faculty: String(data.get('faculty') || ''),
-      source: 'Website enquiry',
-    });
-    setSent(true);
-    form.reset();
+    setBusy(true); setError(''); setSent(false);
+    try {
+      await submitPublicLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('faculty') || ''), source: 'Website enquiry' });
+      setSent(true); form.reset();
+    } catch (submitError) { setError(submitError.message || 'We could not send your enquiry. Please try again.'); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -169,9 +167,10 @@ function InquiryForm({ editMode }) {
         <label><EditableText id="form-label-phone" value="Phone number" editMode={editMode} as="span" /><input name="phone" type="tel" autoComplete="tel" placeholder={getSiteCopy('form-placeholder-phone', '+977')} required /></label>
         <label><EditableText id="form-label-faculty" value="Faculty of interest" editMode={editMode} as="span" /><select name="faculty" defaultValue="" required><option value="" disabled>{getSiteCopy('form-faculty-placeholder', 'Select a faculty')}</option>{faculties.map((faculty) => <option key={faculty}>{faculty}</option>)}</select></label>
       </div>
-      <button className="button button-primary form-submit" type="submit"><EditableText id="form-submit" value="Send enquiry" editMode={editMode} /> <Icon name="arrow" size={16} /></button>
+      <button className="button button-primary form-submit" type="submit" disabled={busy}>{busy ? 'Sending…' : <><EditableText id="form-submit" value="Send enquiry" editMode={editMode} /> <Icon name="arrow" size={16} /></>}</button>
       <EditableText id="form-note" value="Share a few details so our team can guide you." editMode={editMode} as="p" className="form-note" />
       {sent && <div className="form-success" role="status"><Icon name="check" size={17} /> <EditableText id="form-success" value="Thank you. Your enquiry has been received." editMode={editMode} /> </div>}
+      {error && <p className="form-error" role="alert">{error}</p>}
     </form>
   );
 }
@@ -361,6 +360,21 @@ function App() {
 
   const currentPath = appPath(window.location.pathname);
   const isCrmPath = currentPath.replace(/\/+$/, '') === '/crm';
+  const [landingPage, setLandingPage] = useState(null);
+  const [landingLoading, setLandingLoading] = useState(false);
+  useEffect(() => {
+    if (isCrmPath) return;
+    loadPublicSiteContent();
+    const match = currentPath.match(/^\/landing\/([^/]+)\/?$/);
+    if (!match) { setLandingPage(null); setLandingLoading(false); return; }
+    let active = true;
+    setLandingLoading(true);
+    fetchPublicLandingPage(decodeURIComponent(match[1]), new URLSearchParams(window.location.search).get('preview') === '1')
+      .then((page) => { if (active) setLandingPage(page ? { ...page, preview: new URLSearchParams(window.location.search).get('preview') === '1' } : null); })
+      .catch(() => { if (active) setLandingPage(null); })
+      .finally(() => { if (active) setLandingLoading(false); });
+    return () => { active = false; };
+  }, [currentPath, isCrmPath]);
   useEffect(() => {
     if (isCrmPath || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
     const targets = Array.from(document.querySelectorAll('[data-reveal]'));
@@ -404,8 +418,11 @@ function App() {
     if (CRM) return <React.Suspense fallback={<main className="crm-unavailable">Loading…</main>}><CRM /></React.Suspense>;
     return <main className="crm-unavailable" role="status">Page not found.</main>;
   }
-  const landingPage = resolveLandingPage(currentPath, window.location.search);
-  if (landingPage) return <LandingPageView page={landingPage} />;
+  if (currentPath.startsWith('/landing/')) {
+    if (landingLoading) return <main className="crm-unavailable" role="status">Loading campaign…</main>;
+    if (landingPage) return <LandingPageView page={landingPage} />;
+    return <main className="crm-unavailable" role="status">This campaign page is not available.</main>;
+  }
   const sitePage = resolveSitePage(currentPath);
 
   if (sitePage) return (

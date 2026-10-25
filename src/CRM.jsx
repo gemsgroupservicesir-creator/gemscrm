@@ -1,13 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { coursesOfInterest } from './data/siteContent.js';
-import { addLead, exportLeadsCsv, importLeadsCsv, readLeads, subscribeToLeads, unassignLeadsFromCounselor, updateLead } from './data/crmStore.js';
+import { addLead, exportLeadsCsv, importLeadsCsv, readLeads, subscribeToLeads, updateLead } from './data/crmStore.js';
 import { readCounselors, saveCounselors, subscribeToCounselors } from './data/crmCounselors.js';
-import { authenticateCrmAdmin, authenticateCrmCounselor, createCrmAdmin, crmGetSession, crmHasAdmin, deleteCounselorCredentials, setCounselorCredentials, logoutCrmAdmin } from './data/crmAuth.js';
+import { authenticateCrm, createCrmAdmin, crmGetSession, crmHasAdmin, deleteCrmCounselor, deleteCounselorCredentials, setCounselorCredentials, logoutCrmAdmin } from './data/crmAuth.js';
 import WebsiteEditor from './WebsiteEditor.jsx';
 import { LandingPageManager } from './LandingPages.jsx';
-import { readLandingPages, saveLandingPage } from './data/landingPages.js';
 import { appUrl } from './data/siteUrl.js';
-import { ATTENDANCE_TARGET_MS, endCounselorAttendance, getAttendanceForDay, getLocalDayKey, readAttendance, subscribeToAttendance } from './data/crmAttendance.js';
+import { ATTENDANCE_TARGET_MS, getAttendanceForDay, getLocalDayKey, readAttendance, subscribeToAttendance } from './data/crmAttendance.js';
+import { loadCrmData } from './data/crmApi.js';
 
 const statuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
 const activeStatuses = new Set(['New', 'Contacted', 'Follow-up', 'Application']);
@@ -110,15 +110,17 @@ function AttendancePanel({ counselors, counselorId, isAdmin }) {
         </tr>)}</tbody>
       </table></div>}
     </section>
-    <p className="crm-privacy-note">Attendance records are saved in this browser. They are not shared with counselors on other devices.</p>
+    <p className="crm-privacy-note">Attendance sessions are recorded on the server when a counselor signs in and out.</p>
   </section>;
 }
 
 function LeadDialog({ lead, counselors, isAdmin, onClose }) {
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const editing = Boolean(lead);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const values = {
@@ -128,8 +130,8 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
       faculty: String(data.get('course') || data.get('faculty') || ''),
       course: String(data.get('course') || data.get('faculty') || ''),
       status: String(data.get('status') || 'New'),
-      assignedCounselorId: isAdmin ? String(data.get('assignedCounselorId') || '') : (lead?.assignedCounselorId || ''),
     };
+    if (isAdmin) values.assignedCounselorId = String(data.get('assignedCounselorId') || '');
     const noteBody = String(data.get('newNote') || '').trim();
     const previousNotes = Array.isArray(lead?.noteHistory) ? lead.noteHistory : [];
     const noteHistory = noteBody ? [...previousNotes, {
@@ -137,10 +139,14 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
       body: noteBody,
       createdAt: new Date().toISOString(),
     }] : previousNotes;
-    if (editing) updateLead(lead.id, { ...values, noteHistory });
-    else addLead({ ...values, noteHistory, source: 'Added in CRM' });
-    setSaved(true);
-    window.setTimeout(onClose, 450);
+    setSaving(true); setError('');
+    try {
+      if (editing) await updateLead(lead.id, { ...values, noteHistory });
+      else await addLead({ ...values, noteHistory, source: 'Added in CRM' });
+      setSaved(true);
+      window.setTimeout(onClose, 450);
+    } catch (saveError) { setError(saveError.message || 'Could not save this lead.'); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -168,9 +174,10 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
             <label className="crm-notes-field">Add a note<textarea name="newNote" rows="3" placeholder="Record a call, follow-up, or next step…" /></label>
           </section>
           <div className="crm-dialog-footer">
-            {saved && <span className="crm-saved-message">Saved to this browser.</span>}
+            {saved && <span className="crm-saved-message">Saved securely.</span>}
+            {error && <span className="crm-auth-error" role="alert">{error}</span>}
             <button className="crm-secondary-button" type="button" onClick={onClose}>Cancel</button>
-            <button className="crm-primary-button" type="submit">{editing ? 'Save changes' : 'Add lead'}</button>
+            <button className="crm-primary-button" type="submit" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add lead'}</button>
           </div>
         </form>
       </section>
@@ -259,12 +266,15 @@ function CounselorManager({ counselors }) {
     setError('');
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
-    saveCounselors(draft);
-    setSaved(true);
-    setError('');
-    clearUnavailableLandingRoutes(draft);
+    setBusyId('settings');
+    try {
+      await saveCounselors(draft);
+      setSaved(true);
+      setError('');
+    } catch (saveError) { setError(saveError.message || 'Could not save counselor access.'); }
+    finally { setBusyId(''); }
   }
 
   async function saveCredentials(counselorId) {
@@ -274,18 +284,18 @@ function CounselorManager({ counselors }) {
       setError('Enter a sign-in ID with at least 3 characters.');
       return;
     }
-    if (String(fields.password || '').length < 10) {
-      setError('Enter a password with at least 10 characters.');
+    if (String(fields.password || '').length < 12) {
+      setError('Enter a password with at least 12 characters.');
       return;
     }
     setBusyId(counselorId);
     try {
-      saveCounselors(draft);
+      await saveCounselors(draft);
       const updated = await setCounselorCredentials(counselorId, fields.username, fields.password);
+      await loadCrmData();
       setDraft((items) => items.map((item) => item.id === counselorId ? { ...item, username: updated.username, credential: updated.credential } : item));
       setCredentialInputs((current) => ({ ...current, [counselorId]: { username: updated.username, password: '' } }));
       setSaved(true);
-      clearUnavailableLandingRoutes(readCounselors());
     } catch (credentialError) {
       setError(credentialError.message || 'Could not save counselor credentials.');
     } finally {
@@ -293,25 +303,30 @@ function CounselorManager({ counselors }) {
     }
   }
 
-  function removeCredentials(counselor) {
+  async function removeCredentials(counselor) {
     if (!window.confirm(`Delete sign-in credentials for ${counselor.name}? They will no longer be able to sign in.`)) return;
-    deleteCounselorCredentials(counselor.id);
-    setCredentialInputs((current) => ({ ...current, [counselor.id]: { username: '', password: '' } }));
-    clearLandingRoutes(counselor.id);
-    setSaved(false);
+    setBusyId(counselor.id);
+    try {
+      await deleteCounselorCredentials(counselor.id);
+      await loadCrmData();
+      setCredentialInputs((current) => ({ ...current, [counselor.id]: { username: '', password: '' } }));
+      setSaved(false);
+    } catch (deleteError) { setError(deleteError.message || 'Could not delete credentials.'); }
+    finally { setBusyId(''); }
   }
 
-  function removeCounselor(counselor) {
+  async function removeCounselor(counselor) {
     if (!window.confirm(`Delete ${counselor.name}? Their CRM sign-in will be removed, assigned leads and landing pages will become unassigned, and attendance history will be retained.`)) return;
     const next = draft.filter((item) => item.id !== counselor.id);
-    saveCounselors(next);
-    unassignLeadsFromCounselor(counselor.id);
-    clearLandingRoutes(counselor.id);
-    readAttendance().filter((session) => session.counselorId === counselor.id && !session.loggedOutAt).forEach((session) => endCounselorAttendance(session.id));
-    setDraft(next);
-    setCredentialInputs((current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== counselor.id)));
-    setSaved(false);
-    setError('');
+    setBusyId(counselor.id);
+    try {
+      await deleteCrmCounselor(counselor.id);
+      await loadCrmData();
+      setDraft(next);
+      setCredentialInputs((current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== counselor.id)));
+      setSaved(false); setError('');
+    } catch (deleteError) { setError(deleteError.message || 'Could not delete this counselor.'); }
+    finally { setBusyId(''); }
   }
 
   function changePermission(counselorId, permission, checked) {
@@ -331,7 +346,7 @@ function CounselorManager({ counselors }) {
           <label><span>Display name</span><input value={counselor.name} required maxLength={60} onChange={(event) => { setSaved(false); setDraft((items) => items.map((item) => item.id === counselor.id ? { ...item, name: event.target.value } : item)); }} /></label>
           <div className="crm-counselor-credential-fields">
             <label><span>Manual sign-in ID</span><input autoComplete="username" value={credentialInputs[counselor.id]?.username || ''} placeholder="Enter an ID or email" onChange={(event) => { setSaved(false); setCredentialInputs((current) => ({ ...current, [counselor.id]: { ...current[counselor.id], username: event.target.value } })); }} /></label>
-            <label><span>{counselor.credential ? 'New password' : 'Manual password'}</span><input type="password" autoComplete="new-password" value={credentialInputs[counselor.id]?.password || ''} placeholder="At least 10 characters" onChange={(event) => { setSaved(false); setCredentialInputs((current) => ({ ...current, [counselor.id]: { ...current[counselor.id], password: event.target.value } })); }} /></label>
+            <label><span>{counselor.credential ? 'New password' : 'Manual password'}</span><input type="password" autoComplete="new-password" minLength={12} maxLength={128} value={credentialInputs[counselor.id]?.password || ''} placeholder="At least 12 characters" onChange={(event) => { setSaved(false); setCredentialInputs((current) => ({ ...current, [counselor.id]: { ...current[counselor.id], password: event.target.value } })); }} /></label>
           </div>
           <fieldset className="crm-counselor-access"><legend>CRM access</legend>
             <label><input type="checkbox" checked={Boolean(counselor.permissions?.leads)} onChange={(event) => changePermission(counselor.id, 'leads', event.target.checked)} /> Leads assigned to this counselor</label>
@@ -342,24 +357,17 @@ function CounselorManager({ counselors }) {
         <div className="crm-counselor-account-actions"><button className="crm-primary-button" type="button" disabled={busyId === counselor.id} onClick={() => saveCredentials(counselor.id)}>{busyId === counselor.id ? 'Saving…' : counselor.credential ? 'Save ID & password' : 'Set ID & password'}</button>{counselor.credential && <button className="crm-secondary-button crm-delete-credential" type="button" onClick={() => removeCredentials(counselor)}>Delete credentials</button>}<button className="crm-secondary-button crm-delete-counselor" type="button" disabled={busyId === counselor.id} onClick={() => removeCounselor(counselor)}>Delete counselor</button></div>
       </article>)}</div>
       {error && <p className="crm-landing-error" role="alert">{error}</p>}
-      <div className="crm-editor-actions">{saved && <span className="crm-editor-save-message" role="status">Access settings saved.</span>}<button className="crm-primary-button" type="submit">Save access settings</button></div>
-      <p className="crm-privacy-note">Enter counselor IDs and passwords yourself. Passwords are stored as salted hashes in this browser. This local CRM does not provide server-enforced security or shared accounts across devices.</p>
+      <div className="crm-editor-actions">{saved && <span className="crm-editor-save-message" role="status">Access settings saved.</span>}<button className="crm-primary-button" type="submit" disabled={busyId === 'settings'}>{busyId === 'settings' ? 'Saving…' : 'Save access settings'}</button></div>
+      <p className="crm-privacy-note">Passwords are salted and hashed on the server. Counselors can access only the leads assigned to their account.</p>
     </form>
   </section>;
-}
-
-function clearLandingRoutes(counselorId) {
-  readLandingPages().filter((page) => page.assignedCounselorId === counselorId).forEach((page) => saveLandingPage({ ...page, assignedCounselorId: '' }));
-}
-
-function clearUnavailableLandingRoutes(counselors) {
-  const activeIds = new Set(counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads).map((counselor) => counselor.id));
-  readLandingPages().filter((page) => page.assignedCounselorId && !activeIds.has(page.assignedCounselorId)).forEach((page) => saveLandingPage({ ...page, assignedCounselorId: '' }));
 }
 
 function CRMWorkspace({ session, onLogout }) {
   const [leads, setLeads] = useState(() => readLeads());
   const [counselors, setCounselors] = useState(() => readCounselors());
+  const [dataReady, setDataReady] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All leads');
   const [dialog, setDialog] = useState(null);
@@ -373,13 +381,15 @@ function CRMWorkspace({ session, onLogout }) {
   useEffect(() => subscribeToLeads(setLeads), []);
   useEffect(() => subscribeToCounselors(setCounselors), []);
   useEffect(() => {
-    if (session.role !== 'counselor' || !session.attendanceSessionId) return undefined;
-    const closeAttendanceWhenLeaving = (event) => {
-      if (!event.persisted) endCounselorAttendance(session.attendanceSessionId);
-    };
-    window.addEventListener('pagehide', closeAttendanceWhenLeaving);
-    return () => window.removeEventListener('pagehide', closeAttendanceWhenLeaving);
-  }, [session.role, session.attendanceSessionId]);
+    let active = true;
+    loadCrmData().then(() => { if (active) setDataReady(true); }).catch((loadError) => {
+      if (!active) return;
+      setDataReady(true);
+      setWorkspaceError(loadError.message || 'Could not load CRM records.');
+      if (loadError.message === 'Sign in to continue.') onLogout();
+    });
+    return () => { active = false; };
+  }, [session.id, onLogout]);
 
   const currentCounselor = counselors.find((counselor) => counselor.id === session.counselorId);
   const tabs = [
@@ -392,8 +402,8 @@ function CRMWorkspace({ session, onLogout }) {
   const currentTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : (tabs[0]?.id || 'no-access');
 
   useEffect(() => {
-    if (!isAdmin && (!currentCounselor?.credential || session.credentialHash !== currentCounselor.credential.hash || !tabs.length)) onLogout();
-  }, [isAdmin, currentCounselor?.credential, session.credentialHash, tabs.length, onLogout]);
+    if (dataReady && !isAdmin && !currentCounselor?.credential) onLogout();
+  }, [dataReady, isAdmin, currentCounselor?.credential, onLogout]);
 
   const sortedLeads = useMemo(() => [...leads].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), [leads]);
   const accessibleLeads = isAdmin ? sortedLeads : sortedLeads.filter((lead) => lead.assignedCounselorId === session.counselorId);
@@ -409,11 +419,11 @@ function CRMWorkspace({ session, onLogout }) {
   const inProgress = accessibleLeads.filter((lead) => activeStatuses.has(lead.status || 'New')).length;
 
   function changeStatus(id, status) {
-    updateLead(id, { status });
+    updateLead(id, { status }).catch((error) => setWorkspaceError(error.message || 'Could not update the lead.'));
   }
 
   function assignCounselor(id, assignedCounselorId) {
-    updateLead(id, { assignedCounselorId });
+    updateLead(id, { assignedCounselorId }).catch((error) => setWorkspaceError(error.message || 'Could not assign the lead.'));
   }
 
   async function importLeadFile(event) {
@@ -423,7 +433,7 @@ function CRMWorkspace({ session, onLogout }) {
     setImportNotice('');
     setImportError('');
     try {
-      const result = importLeadsCsv(await file.text(), counselors, isAdmin ? '' : session.counselorId, isAdmin);
+      const result = await importLeadsCsv(await file.text(), counselors, isAdmin ? '' : session.counselorId, isAdmin);
       setImportNotice(`Imported ${result.imported} ${result.imported === 1 ? 'lead' : 'leads'}${result.skipped ? ` · skipped ${result.skipped} invalid or duplicate ${result.skipped === 1 ? 'row' : 'rows'}` : ''}.`);
     } catch (error) {
       setImportError(error.message || 'Could not import this CSV file.');
@@ -442,6 +452,9 @@ function CRMWorkspace({ session, onLogout }) {
       </header>
 
       <main className="crm-main">
+        {!dataReady && <section className="crm-empty" role="status"><h2>Connecting securely…</h2><p>Loading CRM records from the server.</p></section>}
+        {workspaceError && <p className="crm-import-error" role="alert">{workspaceError}</p>}
+        {dataReady && <>
         {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>}
         {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
@@ -457,7 +470,7 @@ function CRMWorkspace({ session, onLogout }) {
         </section>
 
         <section className="crm-leads-panel">
-          <div className="crm-panel-heading"><div><h2>Enquiries</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'saved in this browser' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Board</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>List</button></div><input ref={importInputRef} className="crm-hidden-file-input" type="file" accept=".csv,text/csv" onChange={importLeadFile} /><button className="crm-export-button" type="button" onClick={() => importInputRef.current?.click()}>Import CSV</button><button className="crm-export-button" type="button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
+          <div className="crm-panel-heading"><div><h2>Enquiries</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'stored on the server' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Board</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>List</button></div><input ref={importInputRef} className="crm-hidden-file-input" type="file" accept=".csv,text/csv" onChange={importLeadFile} /><button className="crm-export-button" type="button" onClick={() => importInputRef.current?.click()}>Import CSV</button><button className="crm-export-button" type="button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
           <div className="crm-toolbar">
             <label className="crm-search"><span aria-hidden="true">⌕</span><input aria-label="Search leads" placeholder="Search name, email, phone…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
             <label className="crm-filter"><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All leads</option>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
@@ -467,7 +480,8 @@ function CRMWorkspace({ session, onLogout }) {
 
           {filteredLeads.length ? leadView === 'board' ? <LeadKanbanBoard leads={filteredLeads} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} /> : <div className="crm-table-wrap"><table className="crm-table"><thead><tr><th>Student</th><th>Contact & interest</th><th>Source</th><th>Assigned counselor</th><th>Status</th><th>Notes</th><th>Received</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{filteredLeads.map((lead) => <LeadRow key={lead.id} lead={lead} counselors={counselors} isAdmin={isAdmin} onEdit={(selected) => setDialog(selected)} onStatusChange={changeStatus} onAssign={assignCounselor} />)}</tbody></table></div> : <div className="crm-empty"><div className="crm-empty-icon">✦</div><h3>{accessibleLeads.length ? 'No matching enquiries' : isAdmin ? 'Your enquiry pipeline starts here' : 'No leads assigned yet'}</h3><p>{accessibleLeads.length ? 'Try another name or status filter.' : isAdmin ? 'When a student submits the website enquiry form, their details will be added to this list.' : 'Ask your administrator to route a landing page to your counselor account.'}</p>{accessibleLeads.length ? <button className="crm-secondary-button" onClick={() => { setSearch(''); setStatusFilter('All leads'); }}>Clear filters</button> : isAdmin ? <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}>Add your first lead</button> : null}</div>}
         </section>
-        <p className="crm-privacy-note">Leads are stored in this browser only. Connect a secured server or CRM API to share records across devices or receive enquiries from the live WordPress website.</p>
+        <p className="crm-privacy-note">Student records and counselor assignments are stored on the server. Access is checked for every CRM request.</p>
+        </>}
         </>}
       </main>
       {dialog && isAdmin && <LeadDialog lead={dialog.mode === 'new' ? null : dialog} counselors={counselors} isAdmin={isAdmin} onClose={() => setDialog(null)} />}
@@ -480,9 +494,21 @@ function CRMLogin({ onAuthenticated }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [setupToken, setSetupToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const hasAdmin = crmHasAdmin();
+  const [status, setStatus] = useState(null);
+  const [statusError, setStatusError] = useState('');
+  const [checkingStatus, setCheckingStatus] = useState(true);
+  const hasAdmin = Boolean(status?.adminExists);
+
+  useEffect(() => {
+    let active = true;
+    crmHasAdmin().then((value) => { if (active) setStatus(value); })
+      .catch((statusLoadError) => { if (active) setStatusError(statusLoadError.message || 'The server database is not available.'); })
+      .finally(() => { if (active) setCheckingStatus(false); });
+    return () => { active = false; };
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -491,21 +517,16 @@ function CRMLogin({ onAuthenticated }) {
       setError('The passwords do not match.');
       return;
     }
+    if (!hasAdmin && !status?.setupEnabled) {
+      setError('The admin setup token has not been configured in Vercel yet.');
+      return;
+    }
     setBusy(true);
     try {
-      if (hasAdmin) {
-        const adminSignedIn = await authenticateCrmAdmin(username, password);
-        const counselorSignedIn = adminSignedIn ? false : await authenticateCrmCounselor(username, password);
-        if (!adminSignedIn && !counselorSignedIn) {
-          setError('That username or password is not correct.');
-          return;
-        }
-      } else {
-        await createCrmAdmin(username, password);
-      }
-      onAuthenticated();
-    } catch {
-      setError('Login is unavailable in this browser. Please use a current browser with secure storage enabled.');
+      const session = hasAdmin ? await authenticateCrm(username, password) : await createCrmAdmin(username, password, setupToken);
+      onAuthenticated(session);
+    } catch (loginError) {
+      setError(loginError.message || 'Could not sign in. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -516,25 +537,37 @@ function CRMLogin({ onAuthenticated }) {
     <main className="crm-auth-main">
       <form className="crm-auth-card" onSubmit={submit}>
         <span className="crm-kicker">GEMS GROUP SERVICES · CRM</span>
+        {checkingStatus ? <><h1>Connecting securely…</h1><p>Checking the server authentication service.</p></> : statusError ? <><h1>CRM service unavailable</h1><p>{statusError}</p><p className="crm-auth-footnote">Connect the Postgres database in Vercel, then redeploy this project.</p></> : <>
         <h1>{hasAdmin ? 'Sign in to your CRM' : 'Set up your CRM login'}</h1>
-        <p>{hasAdmin ? 'Sign in with your admin or counselor ID. Access depends on the permissions set by the admin.' : 'Create the admin login for this browser to manage counselor accounts, leads, and website access.'}</p>
-        {!hasAdmin && <div className="crm-auth-notice"><strong>First-time setup</strong><span>Your admin account is saved only in this browser. Choose a password you will remember.</span></div>}
+        <p>{hasAdmin ? 'Sign in with your admin or counselor ID. Access is enforced by the server.' : 'Create the first administrator account to manage counselor access, leads, and website content.'}</p>
+        {!hasAdmin && status?.setupEnabled && <div className="crm-auth-notice"><strong>First-time setup</strong><span>Use the setup token configured in Vercel. It can be used only once, before the first administrator is created.</span></div>}
+        {!hasAdmin && !status?.setupEnabled && <div className="crm-auth-notice"><strong>Setup needs one server setting</strong><span>Add CRM_BOOTSTRAP_TOKEN to this project’s Vercel environment variables, then redeploy.</span></div>}
+        {!hasAdmin && status?.setupEnabled && <label>One-time setup token<input type="password" autoComplete="off" value={setupToken} onChange={(event) => setSetupToken(event.target.value)} required /></label>}
         <label>{hasAdmin ? 'Admin username or counselor ID' : 'Admin username'}<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} required /></label>
-        <label>Password<input type="password" autoComplete={hasAdmin ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={10} required /></label>
-        {!hasAdmin && <label>Confirm password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={10} required /></label>}
+        <label>Password<input type="password" autoComplete={hasAdmin ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} required /></label>
+        {!hasAdmin && <label>Confirm password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={12} maxLength={128} required /></label>}
         {error && <p className="crm-auth-error" role="alert">{error}</p>}
-        <button className="crm-primary-button" type="submit" disabled={busy}>{busy ? 'Please wait…' : hasAdmin ? 'Sign in' : 'Create admin login'}</button>
-        <span className="crm-auth-footnote">This local login protects this browser session. A live shared CRM needs server-side authentication.</span>
+        <button className="crm-primary-button" type="submit" disabled={busy || checkingStatus || Boolean(statusError) || (!hasAdmin && !status?.setupEnabled)}>{busy ? 'Please wait…' : hasAdmin ? 'Sign in' : 'Create admin login'}</button>
+        <span className="crm-auth-footnote">Sessions use secure, HTTP-only cookies. Passwords are hashed on the server.</span>
+        </>}
       </form>
     </main>
   </div>;
 }
 
 export default function CRM() {
-  const [session, setSession] = useState(() => crmGetSession());
-  function signOut() {
-    logoutCrmAdmin();
+  const [session, setSession] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const signOut = useCallback(async () => {
+    await logoutCrmAdmin();
     setSession(null);
-  }
-  return session ? <CRMWorkspace session={session} onLogout={signOut} /> : <CRMLogin onAuthenticated={() => setSession(crmGetSession())} />;
+  }, []);
+  useEffect(() => {
+    let active = true;
+    crmGetSession().then((value) => { if (active) setSession(value); }).catch(() => { if (active) setSession(null); })
+      .finally(() => { if (active) setCheckingSession(false); });
+    return () => { active = false; };
+  }, []);
+  if (checkingSession) return <main className="crm-unavailable" role="status">Connecting securely…</main>;
+  return session ? <CRMWorkspace session={session} onLogout={signOut} /> : <CRMLogin onAuthenticated={setSession} />;
 }

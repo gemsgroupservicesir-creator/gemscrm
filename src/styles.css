@@ -104,6 +104,7 @@ img { max-width: 100%; }
 .form-submit { width: 100%; min-height: 44px; }
 .form-note { margin: 10px 0 0; color: #99a3b0; text-align: center; font-size: 10px; }
 .form-success { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 12px; color: #2b8d62; font-size: 12px; font-weight: 700; }
+.form-error { margin: 10px 0 0; color: #b83e3e; font-size: 12px; line-height: 1.5; }
 .hero-bottom-glow { position: absolute; bottom: 0; left: 0; width: 38%; height: 3px; background: linear-gradient(90deg, var(--blue), transparent); }
 
 .highlights-section { position: relative; z-index: 2; margin-top: -38px; }

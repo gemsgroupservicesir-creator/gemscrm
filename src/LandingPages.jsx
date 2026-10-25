@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { coursesOfInterest } from './data/siteContent.js';
-import { addLead, readLeads, subscribeToLeads } from './data/crmStore.js';
+import { readLeads, subscribeToLeads, submitPublicLead } from './data/crmStore.js';
 import { readCounselors, subscribeToCounselors } from './data/crmCounselors.js';
 import { deleteLandingPage, newLandingPage, readLandingPages, saveLandingPage, subscribeToLandingPages } from './data/landingPages.js';
 import { compressLeadImage } from './data/imageUpload.js';
@@ -94,7 +94,7 @@ export function LandingPageManager() {
     }
   }
 
-  function persist(event, publish) {
+  async function persist(event, publish) {
     event.preventDefault();
     setNotice('');
     setError('');
@@ -112,7 +112,7 @@ export function LandingPageManager() {
       return;
     }
     try {
-      const saved = saveLandingPage(next);
+      const saved = await saveLandingPage(next);
       setEditing(saved);
       setNotice(publish ? 'Landing page published.' : 'Landing page saved as a draft.');
     } catch (saveError) {
@@ -120,11 +120,13 @@ export function LandingPageManager() {
     }
   }
 
-  function removePage() {
+  async function removePage() {
     if (!editing || !window.confirm(`Delete “${editing.name}”? The landing page and its settings will be removed.`)) return;
-    deleteLandingPage(editing.id);
-    setEditing(null);
-    setNotice('Landing page deleted.');
+    try {
+      await deleteLandingPage(editing.id);
+      setEditing(null);
+      setNotice('Landing page deleted.');
+    } catch (deleteError) { setError(deleteError.message || 'Could not delete this page.'); }
   }
 
   function openPreview() {
@@ -170,7 +172,7 @@ export function LandingPageManager() {
             {qrError && <p className="crm-landing-error" role="alert">{qrError}</p>}
             {qrDataUrl && <><img src={qrDataUrl} alt={`QR code for ${editing.name || 'campaign page'}`} /><a className="crm-secondary-button" href={qrDataUrl} download={`${slugify(editing.slug) || 'campaign'}-qr.png`}>Download QR code</a><span>{qrShareUrl}</span></>}
           </div>}
-          <p className="crm-landing-qr-note">This version saves campaign pages and form submissions in the current browser. Students on other devices will need shared campaign storage and a server connection for their enquiries to reach your CRM.</p>
+          <p className="crm-landing-qr-note">Published pages and student enquiries are served through the shared database, including when students open the QR code on another device.</p>
         </section>
         <fieldset className="crm-landing-fields"><legend>Lead form fields</legend><p>Name and Gmail address are always required. Add or remove extra details, and choose whether each is required.</p><div className="crm-landing-field-options">
           <div className="crm-landing-field-option"><label><input type="checkbox" checked={editing.fields.includes('phone')} onChange={() => toggleField('phone')} /> Phone number</label>{editing.fields.includes('phone') && <label className="crm-required-option"><input type="checkbox" checked={editing.phoneRequired !== false} onChange={(event) => change('phoneRequired', event.target.checked)} /> Required</label>}</div>
@@ -198,7 +200,7 @@ export function LandingPageManager() {
           <button className="crm-secondary-button" type="submit" onClick={(event) => { event.preventDefault(); persist(event, false); }}>Save draft</button>
           <button className="crm-primary-button" type="submit" onClick={(event) => { event.preventDefault(); persist(event, true); }}>{editing.published ? 'Save & publish' : 'Publish page'}</button>
         </div>
-        <p className="crm-privacy-note">Pages are published within this local site. Connect hosting and a server for public visitors outside this browser.</p>
+        <p className="crm-privacy-note">Published campaign pages are available to public visitors. Student submissions are assigned on the server using the campaign’s saved counselor.</p>
       </form> : <div className="crm-landing-empty-state"><span aria-hidden="true">✦</span><h2>Build your first campaign page</h2><p>Choose a headline, set up a short enquiry form, and publish a page link to share with students.</p><button className="crm-primary-button" type="button" onClick={() => setEditing(newLandingPage())}>Create landing page</button></div>}
     </div>
   </section>;
@@ -236,7 +238,7 @@ export function LandingPageView({ page }) {
         label: field.label,
         value: String(data.get(`customField-${field.id}`) || '').trim(),
       })).filter((answer) => answer.value);
-      addLead({
+      await submitPublicLead({
         name: String(data.get('name') || ''),
         email: String(data.get('email') || ''),
         phone: String(data.get('phone') || ''),
@@ -245,8 +247,7 @@ export function LandingPageView({ page }) {
         image,
         formAnswers,
         source: `Landing page: /landing/${page.slug}/`,
-        assignedCounselorId: readCounselors().some((counselor) => counselor.id === page.assignedCounselorId && counselor.username && counselor.credential && counselor.permissions?.leads) ? page.assignedCounselorId : '',
-      });
+      }, page.slug);
       setSent(true);
       form.reset();
     } catch (error) {

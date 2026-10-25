@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { siteContent } from './data/siteContent.js';
-import { addLead } from './data/crmStore.js';
+import { submitPublicLead } from './data/crmStore.js';
 import { appUrl } from './data/siteUrl.js';
 import { getSiteCopy, readSiteCollection, saveSiteCopy, subscribeToSiteCollections, subscribeToSiteCopy } from './data/siteCopy.js';
 
@@ -53,7 +53,7 @@ function Editable({ id, text, editMode, as: Tag = 'p', className = '' }) {
   }, [id, text]);
   return <Tag className={className} contentEditable={editMode} suppressContentEditableWarning spellCheck={editMode} onBlur={editMode ? (event) => {
     const next = event.currentTarget.innerText.trim();
-    if (next) { saveSiteCopy(id, next); setValue(next); }
+    if (next) { saveSiteCopy(id, next).then(() => setValue(next)).catch(() => setValue(getSiteCopy(id, text))); }
     else event.currentTarget.innerText = value;
   } : undefined}>{value}</Tag>;
 }
@@ -64,14 +64,19 @@ function PageBanner({ eyebrow = 'GEMS GROUP SERVICES · STUDENT SUPPORT', eyebro
 
 function LeadCapture() {
   const [sent, setSent] = useState(false);
-  function submit(event) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     const extra = [`Question: ${data.get('question')}`, `Preferred destination: ${data.get('destination')}`].join('\n');
-    addLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('question') || 'Consultation'), source: 'Website contact form', notes: extra });
-    setSent(true);
-    form.reset();
+    setBusy(true); setError(''); setSent(false);
+    try {
+      await submitPublicLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('question') || 'Consultation'), source: 'Website contact form', notes: extra });
+      setSent(true); form.reset();
+    } catch (submitError) { setError(submitError.message || 'We could not send your enquiry. Please try again.'); }
+    finally { setBusy(false); }
   }
   return <form className="contact-lead-form" data-reveal="right" onSubmit={submit}>
     <span className="eyebrow"><Editable id="contact-form-eyebrow" text="REQUEST A CONSULTATION" editMode={false} as="span" /></span>
@@ -84,7 +89,8 @@ function LeadCapture() {
       <label><Editable id="contact-form-label-question" text="Your question" editMode={false} as="span" /><select name="question">{['Academic counselling', 'Course and institution selection', 'Admission application guidance', 'Scholarship information', 'Other'].map((label, index) => <option key={label}>{getSiteCopy(`contact-question-option-${index}`, label)}</option>)}</select></label>
       <label><Editable id="contact-form-label-destination" text="Study plans" editMode={false} as="span" /><select name="destination">{['Higher education options', 'Still exploring'].map((label, index) => <option key={label}>{getSiteCopy(`contact-destination-option-${index}`, label)}</option>)}</select></label>
     </div>
-    <button className="button button-primary" type="submit"><Editable id="contact-form-submit" text="Send enquiry" editMode={false} as="span" /> <span aria-hidden="true">→</span></button>
+    <button className="button button-primary" type="submit" disabled={busy}>{busy ? 'Sending…' : <><Editable id="contact-form-submit" text="Send enquiry" editMode={false} as="span" /> <span aria-hidden="true">→</span></>}</button>
+    {error && <p className="form-error" role="alert">{error}</p>}
     {sent && <p className="form-success" role="status"><Editable id="contact-form-success" text="Thank you. Your enquiry has been received." editMode={false} as="span" /></p>}
   </form>;
 }
