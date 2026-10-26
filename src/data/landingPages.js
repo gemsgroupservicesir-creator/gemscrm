@@ -1,5 +1,5 @@
 import { sanitizeWebsiteContent } from './siteCopy.js';
-import { coursesOfInterest } from './siteContent.js';
+import { coursesOfInterest, siteContent } from './siteContent.js';
 import { crmCache, crmRequest, readCache, refreshCrmData, subscribeToCache } from './crmApi.js';
 
 export function readLandingPages() { return readCache('landingPages'); }
@@ -37,8 +37,10 @@ export function newLandingPage() {
     headline: 'Find a study path that fits your goals.',
     description: 'Share your academic interests and qualifications. GEMS Group Services can help you explore course options and understand admission steps.',
     formTitle: 'Request a consultation', buttonLabel: 'Send enquiry', theme: 'blue', campaignImage: '',
-    fields: ['phone', 'faculty', 'image'], phoneRequired: true, facultyRequired: true, imageRequired: false,
+    fields: ['phone', 'faculty', 'university', 'image'], phoneRequired: true, facultyRequired: true, universityRequired: false, imageRequired: false,
     courseOptions: [...coursesOfInterest], visibleCourses: [...coursesOfInterest],
+    universityOptions: siteContent.universities.map((university) => university.name),
+    visibleUniversities: siteContent.universities.map((university) => university.name),
     customFields: [], assignedCounselorId: '', published: false, qrEnabled: false, createdAt: now, updatedAt: now,
   };
 }

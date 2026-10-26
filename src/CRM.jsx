@@ -129,6 +129,7 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
       phone: String(data.get('phone') || ''),
       faculty: String(data.get('course') || data.get('faculty') || ''),
       course: String(data.get('course') || data.get('faculty') || ''),
+      university: String(data.get('university') || ''),
       status: String(data.get('status') || 'New'),
     };
     if (isAdmin) values.assignedCounselorId = String(data.get('assignedCounselorId') || '');
@@ -163,6 +164,7 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
             <label>Email address<input name="email" type="email" defaultValue={lead?.email || ''} required /></label>
             <label>Phone number<input name="phone" type="tel" defaultValue={lead?.phone || ''} required /></label>
             <label>Course<select name="course" defaultValue={lead?.course || lead?.faculty || ''} required><option value="" disabled>Select a course</option>{(lead?.course && !coursesOfInterest.includes(lead.course) ? [lead.course, ...coursesOfInterest] : lead?.faculty && !coursesOfInterest.includes(lead.faculty) ? [lead.faculty, ...coursesOfInterest] : coursesOfInterest).map((course) => <option key={course}>{course}</option>)}</select></label>
+            <label>University/College<input name="university" defaultValue={lead?.university || ''} placeholder="Institution of interest" /></label>
             <label>Status<select name="status" defaultValue={lead?.status || 'New'}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
             {isAdmin && <label>Counselor<select name="assignedCounselorId" defaultValue={counselors.some((counselor) => counselor.id === lead?.assignedCounselorId && counselor.username && counselor.credential && counselor.permissions?.leads) ? lead.assignedCounselorId : ''}><option value="">Unassigned</option>{counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads).map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name}</option>)}</select></label>}
           </div>
@@ -189,7 +191,7 @@ function LeadRow({ lead, counselors, isAdmin, onEdit, onStatusChange, onAssign }
   return (
     <tr>
       <td><div className="crm-person"><span className="crm-avatar">{lead.image ? <img src={appUrl(lead.image)} alt={`${lead.name}'s uploaded image`} /> : initials(lead.name)}</span><div><strong>{lead.name}</strong><span>{lead.email}</span></div></div></td>
-      <td><div className="crm-contact-cell"><span>{lead.phone || '—'}</span><span>{lead.course || lead.faculty || 'No course selected'}</span></div></td>
+      <td><div className="crm-contact-cell"><span>{lead.phone || '—'}</span><span>{lead.course || lead.faculty || 'No course selected'}</span>{lead.university && <span>{lead.university}</span>}</div></td>
       <td><span className={`crm-source ${lead.source === 'Website enquiry' ? 'website' : ''}`}>{lead.source || 'Website enquiry'}</span></td>
       <td>{isAdmin ? <select className="crm-assignee-select" aria-label={`Counselor for ${lead.name}`} value={counselors.some((counselor) => counselor.id === lead.assignedCounselorId && counselor.username && counselor.credential && counselor.permissions?.leads) ? lead.assignedCounselorId : ''} onChange={(event) => onAssign(lead.id, event.target.value)}><option value="">Unassigned</option>{counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads).map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name}</option>)}</select> : <span>{counselors.find((counselor) => counselor.id === lead.assignedCounselorId)?.name || 'Assigned to you'}</span>}</td>
       <td><select className={`crm-status-select status-${(lead.status || 'New').toLowerCase().replaceAll(/[^a-z]+/g, '-')}`} aria-label={`Status for ${lead.name}`} value={lead.status || 'New'} onChange={(event) => onStatusChange(lead.id, event.target.value)}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></td>
@@ -255,6 +257,7 @@ function LeadDetailsPanel({ lead, counselors, isAdmin, onEdit, onStatusChange, o
       <div><span>Email</span><strong>{lead.email || '—'}</strong></div>
       <div><span>Phone</span><strong>{lead.phone || '—'}</strong></div>
       <div><span>Course of interest</span><strong>{lead.course || lead.faculty || '—'}</strong></div>
+      <div><span>University/College</span><strong>{lead.university || '—'}</strong></div>
       <div><span>Source</span><strong>{lead.source || 'Website enquiry'}</strong></div>
     </div>
     {Array.isArray(lead.formAnswers) && lead.formAnswers.length > 0 && <section className="crm-lead-extra-answers"><h3>Form answers</h3>{lead.formAnswers.map((answer) => <div key={answer.id || answer.label}><span>{answer.label}</span><strong>{answer.value || '—'}</strong></div>)}</section>}
@@ -318,6 +321,7 @@ function LeadKanbanBoard({ leads, counselors, isAdmin, onEdit, onStatusChange, o
               <div className="crm-kanban-card-head"><span className="crm-kanban-grip" aria-hidden="true">⠿</span><span className={`crm-kanban-stage status-${leadStatusClass}`}>{lead.status || 'New'}</span></div>
               <div className="crm-kanban-person"><span className="crm-avatar">{lead.image ? <img src={appUrl(lead.image)} alt={`${lead.name}'s uploaded image`} /> : initials(lead.name)}</span><div><button type="button" className="crm-kanban-name" onClick={() => onEdit(lead)}>{lead.name}</button><span>{lead.email}</span></div></div>
               <p className="crm-kanban-course">{lead.course || lead.faculty || 'Course not selected'}</p>
+              {lead.university && <p className="crm-kanban-course">{lead.university}</p>}
               {lead.phone && <p className="crm-kanban-phone">{lead.phone}</p>}
               <div className="crm-kanban-card-meta"><span>{formatDate(lead.createdAt)}</span><button type="button" className="crm-row-edit" onClick={() => onEdit(lead)}>Notes ({noteCount})</button></div>
               <div className="crm-kanban-card-controls">
