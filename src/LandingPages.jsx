@@ -15,11 +15,24 @@ function newCustomFieldId() {
   return window.crypto?.randomUUID?.() || `field-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function editableLandingPage(page) {
+  const courseOptions = Array.isArray(page.courseOptions) ? page.courseOptions : [...coursesOfInterest];
+  return {
+    ...page,
+    courseOptions,
+    visibleCourses: Array.isArray(page.visibleCourses)
+      ? page.visibleCourses.filter((course) => courseOptions.includes(course))
+      : [...courseOptions],
+    customFields: Array.isArray(page.customFields) ? page.customFields : [],
+  };
+}
+
 export function LandingPageManager() {
   const [pages, setPages] = useState(() => readLandingPages());
   const [leads, setLeads] = useState(() => readLeads());
   const [counselors, setCounselors] = useState(() => readCounselors());
   const [editing, setEditing] = useState(null);
+  const [courseDraft, setCourseDraft] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -78,6 +91,45 @@ export function LandingPageManager() {
     setError('');
   }
 
+  function addCourseOption() {
+    const course = courseDraft.trim().replace(/\s+/g, ' ');
+    if (!course) return;
+    if (editing.courseOptions.some((item) => item.toLocaleLowerCase() === course.toLocaleLowerCase())) {
+      setError('That course is already in this list.');
+      setNotice('');
+      return;
+    }
+    setEditing((current) => ({
+      ...current,
+      courseOptions: [...current.courseOptions, course],
+      visibleCourses: [...current.visibleCourses, course],
+    }));
+    setCourseDraft('');
+    setNotice('');
+    setError('');
+  }
+
+  function toggleCourseVisibility(course) {
+    setEditing((current) => ({
+      ...current,
+      visibleCourses: current.visibleCourses.includes(course)
+        ? current.visibleCourses.filter((item) => item !== course)
+        : [...current.visibleCourses, course],
+    }));
+    setNotice('');
+    setError('');
+  }
+
+  function removeCourseOption(course) {
+    setEditing((current) => ({
+      ...current,
+      courseOptions: current.courseOptions.filter((item) => item !== course),
+      visibleCourses: current.visibleCourses.filter((item) => item !== course),
+    }));
+    setNotice('');
+    setError('');
+  }
+
   async function uploadCampaignPicture(event) {
     const input = event.currentTarget;
     const file = input.files?.[0];
@@ -105,6 +157,10 @@ export function LandingPageManager() {
     }
     if (!next.name.trim() || !next.headline.trim() || !next.description.trim() || !next.formTitle.trim() || !next.buttonLabel.trim()) {
       setError('Fill in the page name, headline, introduction, form heading, and button text.');
+      return;
+    }
+    if (publish && next.fields.includes('faculty') && next.visibleCourses.length === 0) {
+      setError('Select at least one course to show, or turn off the Course of interest field.');
       return;
     }
     if ((next.customFields || []).some((field) => !String(field.label || '').trim() || (field.type === 'select' && !String(field.options || '').split(',').some((option) => option.trim())))) {
@@ -138,7 +194,7 @@ export function LandingPageManager() {
   return <section className="crm-landing-manager" aria-labelledby="landing-builder-title">
     <div className="crm-title-row crm-editor-title-row">
       <div><span className="crm-kicker">GEMS GROUP SERVICES · CAMPAIGNS</span><h1 id="landing-builder-title">Landing page builder</h1><p>Create a focused campaign page with a form that adds enquiries to your CRM.</p></div>
-      <button className="crm-primary-button" type="button" onClick={() => { setEditing(newLandingPage()); setNotice(''); setError(''); }}>＋ Create landing page</button>
+      <button className="crm-primary-button" type="button" onClick={() => { setEditing(editableLandingPage(newLandingPage())); setCourseDraft(''); setNotice(''); setError(''); }}>＋ Create landing page</button>
     </div>
     <div className="crm-landing-layout">
       <aside className="crm-landing-list">
@@ -146,7 +202,7 @@ export function LandingPageManager() {
         {!pages.length && <p className="crm-landing-empty">Your campaign pages will appear here.</p>}
         {pages.map((page) => {
           const leadCount = leads.filter((lead) => lead.source === `Landing page: /landing/${page.slug}/`).length;
-          return <button key={page.id} type="button" className={`crm-landing-list-item ${editing?.id === page.id ? 'active' : ''}`} onClick={() => { setEditing({ ...page, customFields: Array.isArray(page.customFields) ? page.customFields : [] }); setNotice(''); setError(''); }}><strong>{page.name}</strong><span><i className={page.published ? 'published' : ''} />{page.published ? 'Published' : 'Draft'} · {leadCount} {leadCount === 1 ? 'lead' : 'leads'}</span></button>;
+          return <button key={page.id} type="button" className={`crm-landing-list-item ${editing?.id === page.id ? 'active' : ''}`} onClick={() => { setEditing(editableLandingPage(page)); setCourseDraft(''); setNotice(''); setError(''); }}><strong>{page.name}</strong><span><i className={page.published ? 'published' : ''} />{page.published ? 'Published' : 'Draft'} · {leadCount} {leadCount === 1 ? 'lead' : 'leads'}</span></button>;
         })}
       </aside>
 
@@ -177,6 +233,15 @@ export function LandingPageManager() {
         <fieldset className="crm-landing-fields"><legend>Lead form fields</legend><p>Name and Gmail address are always required. Add or remove extra details, and choose whether each is required.</p><div className="crm-landing-field-options">
           <div className="crm-landing-field-option"><label><input type="checkbox" checked={editing.fields.includes('phone')} onChange={() => toggleField('phone')} /> Phone number</label>{editing.fields.includes('phone') && <label className="crm-required-option"><input type="checkbox" checked={editing.phoneRequired !== false} onChange={(event) => change('phoneRequired', event.target.checked)} /> Required</label>}</div>
           <div className="crm-landing-field-option"><label><input type="checkbox" checked={editing.fields.includes('faculty')} onChange={() => toggleField('faculty')} /> Course of interest</label>{editing.fields.includes('faculty') && <label className="crm-required-option"><input type="checkbox" checked={editing.facultyRequired !== false} onChange={(event) => change('facultyRequired', event.target.checked)} /> Required</label>}</div>
+          {editing.fields.includes('faculty') && <div className="crm-course-option-editor">
+            <div className="crm-course-option-heading"><div><strong>Courses students can choose</strong><p>Check a course to show it on this page. Uncheck it to hide it, or delete it from this page’s list.</p></div></div>
+            <div className="crm-course-option-add"><input aria-label="New course name" value={courseDraft} onChange={(event) => setCourseDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCourseOption(); } }} placeholder="Add a course, e.g. B.Pharm" /><button className="crm-secondary-button" type="button" onClick={addCourseOption}>＋ Add course</button></div>
+            {!editing.courseOptions.length && <p className="crm-custom-field-empty">No courses in this list yet. Add a course above.</p>}
+            <div className="crm-course-option-list">{editing.courseOptions.map((course) => <div className="crm-course-option-row" key={course}>
+              <label><input type="checkbox" checked={editing.visibleCourses.includes(course)} onChange={() => toggleCourseVisibility(course)} /> <span>{course}</span></label>
+              <button className="crm-collection-remove" type="button" onClick={() => removeCourseOption(course)} aria-label={`Delete ${course}`}>Delete</button>
+            </div>)}</div>
+          </div>}
           <div className="crm-landing-field-option"><label><input type="checkbox" checked={editing.fields.includes('image')} onChange={() => toggleField('image')} /> Student image upload</label>{editing.fields.includes('image') && <label className="crm-required-option"><input type="checkbox" checked={Boolean(editing.imageRequired)} onChange={(event) => change('imageRequired', event.target.checked)} /> Required</label>}</div>
         </div></fieldset>
         <section className="crm-custom-field-editor" aria-labelledby="custom-fields-title">
@@ -201,7 +266,7 @@ export function LandingPageManager() {
           <button className="crm-primary-button" type="submit" onClick={(event) => { event.preventDefault(); persist(event, true); }}>{editing.published ? 'Save & publish' : 'Publish page'}</button>
         </div>
         <p className="crm-privacy-note">Published campaign pages are available to public visitors. Student submissions are assigned on the server using the campaign’s saved counselor.</p>
-      </form> : <div className="crm-landing-empty-state"><span aria-hidden="true">✦</span><h2>Build your first campaign page</h2><p>Choose a headline, set up a short enquiry form, and publish a page link to share with students.</p><button className="crm-primary-button" type="button" onClick={() => setEditing(newLandingPage())}>Create landing page</button></div>}
+      </form> : <div className="crm-landing-empty-state"><span aria-hidden="true">✦</span><h2>Build your first campaign page</h2><p>Choose a headline, set up a short enquiry form, and publish a page link to share with students.</p><button className="crm-primary-button" type="button" onClick={() => { setEditing(editableLandingPage(newLandingPage())); setCourseDraft(''); }}>Create landing page</button></div>}
     </div>
   </section>;
 }
@@ -211,6 +276,10 @@ export function LandingPageView({ page }) {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const preview = new URLSearchParams(window.location.search).get('preview') === '1';
+  const courseOptions = Array.isArray(page.courseOptions) ? page.courseOptions : coursesOfInterest;
+  const visibleCourses = Array.isArray(page.visibleCourses)
+    ? page.visibleCourses.filter((course) => courseOptions.includes(course))
+    : courseOptions;
 
   useEffect(() => {
     if (window.location.hash !== '#lead-form') return undefined;
@@ -269,7 +338,7 @@ export function LandingPageView({ page }) {
         <label><span className="landing-field-label">Full name <i>*</i></span><input name="name" autoComplete="name" placeholder="Your name" required /></label>
         <label><span className="landing-field-label">Gmail address <i>*</i></span><input name="email" type="email" autoComplete="email" placeholder="you@gmail.com" required /></label>
         {page.fields.includes('phone') && <label><span className="landing-field-label">Phone number{page.phoneRequired !== false && <i>*</i>}</span><input name="phone" type="tel" autoComplete="tel" placeholder="+977" required={page.phoneRequired !== false} /></label>}
-        {page.fields.includes('faculty') && <label><span className="landing-field-label">Course of interest{page.facultyRequired !== false && <i>*</i>}</span><select name="faculty" defaultValue="" required={page.facultyRequired !== false}><option value="">Select a course</option>{coursesOfInterest.map((course) => <option key={course}>{course}</option>)}</select></label>}
+        {page.fields.includes('faculty') && <label><span className="landing-field-label">Course of interest{page.facultyRequired !== false && <i>*</i>}</span><select name="faculty" defaultValue="" required={page.facultyRequired !== false}><option value="">Select a course</option>{visibleCourses.map((course) => <option key={course}>{course}</option>)}</select></label>}
         {page.fields.includes('image') && <label><span className="landing-field-label">Student image{page.imageRequired && <i>*</i>}</span><span className="landing-upload-hint">{page.imageRequired ? 'Required · JPG, PNG, or another image under 5 MB' : 'Optional · JPG, PNG, or another image under 5 MB'}<input className="landing-image-input" name="image" type="file" accept="image/*" required={Boolean(page.imageRequired)} /></span></label>}
         {(page.customFields || []).map((field) => <label key={field.id}><span className="landing-field-label">{field.label}{field.required && <i>*</i>}</span>{field.type === 'textarea' ? <textarea name={`customField-${field.id}`} rows="3" required={Boolean(field.required)} /> : field.type === 'select' ? <select name={`customField-${field.id}`} defaultValue="" required={Boolean(field.required)}><option value="">Select an option</option>{(field.options || '').split(',').map((option) => option.trim()).filter(Boolean).map((option) => <option key={option}>{option}</option>)}</select> : <input name={`customField-${field.id}`} type={['text', 'email', 'tel'].includes(field.type) ? field.type : 'text'} required={Boolean(field.required)} />}</label>)}
         {formError && <p className="landing-form-error" role="alert">{formError}</p>}

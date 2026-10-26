@@ -1,4 +1,5 @@
 import { sanitizeWebsiteContent } from './siteCopy.js';
+import { coursesOfInterest } from './siteContent.js';
 import { crmCache, crmRequest, readCache, refreshCrmData, subscribeToCache } from './crmApi.js';
 
 export function readLandingPages() { return readCache('landingPages'); }
@@ -37,6 +38,7 @@ export function newLandingPage() {
     description: 'Share your academic interests and qualifications. GEMS Group Services can help you explore course options and understand admission steps.',
     formTitle: 'Request a consultation', buttonLabel: 'Send enquiry', theme: 'blue', campaignImage: '',
     fields: ['phone', 'faculty', 'image'], phoneRequired: true, facultyRequired: true, imageRequired: false,
+    courseOptions: [...coursesOfInterest], visibleCourses: [...coursesOfInterest],
     customFields: [], assignedCounselorId: '', published: false, qrEnabled: false, createdAt: now, updatedAt: now,
   };
 }
