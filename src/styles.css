@@ -1041,6 +1041,36 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-attendance-log { min-width: 520px; }
 .crm-attendance-view > .crm-privacy-note { margin-top: 13px; }
 
+.crm-daily-report-title-row { align-items: center; }
+.crm-daily-report-date, .crm-daily-report-filters label { display: grid; gap: 6px; color: #64758a; font-size: 10px; font-weight: 800; }
+.crm-daily-report-date input, .crm-daily-report-filters input, .crm-daily-report-filters select { min-height: 39px; padding: 8px 10px; border: 1px solid #dfe6ed; border-radius: 6px; color: #263951; background: #fff; font: inherit; }
+.crm-daily-report-filters { display: flex; gap: 10px; }
+.crm-daily-report-filters label { min-width: 155px; }
+.crm-daily-report-form, .crm-daily-report-card { overflow: hidden; border: 1px solid #e5ebf2; border-radius: 10px; background: #fff; box-shadow: 0 5px 18px rgba(25,52,83,.035); }
+.crm-daily-report-form-head, .crm-daily-report-card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 21px; border-bottom: 1px solid #edf0f4; background: #fbfcfd; }
+.crm-daily-report-form-head h2, .crm-daily-report-card-head h2 { margin: 0; color: #344b66; font-size: 14px; }
+.crm-daily-report-form-head p, .crm-daily-report-card-head p { margin: 5px 0 0; color: #8996a6; font-size: 10px; line-height: 1.5; }
+.crm-daily-report-owner, .crm-daily-report-card-head > span { color: #76869a; font-size: 10px; font-weight: 700; }
+.crm-daily-report-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding: 20px 21px; }
+.crm-daily-report-field { display: grid; gap: 7px; color: #52657b; font-size: 11px; font-weight: 800; }
+.crm-daily-report-field.wide { grid-column: 1 / -1; }
+.crm-daily-report-field > span i { margin-left: 3px; color: #b34848; font-style: normal; }
+.crm-daily-report-field textarea { width: 100%; min-height: 86px; padding: 10px 11px; border: 1px solid #dfe6ed; border-radius: 6px; outline: 0; color: #263951; background: #fff; font: inherit; font-size: 11px; font-weight: 500; line-height: 1.55; resize: vertical; }
+.crm-daily-report-field textarea:focus, .crm-daily-report-date input:focus, .crm-daily-report-filters input:focus, .crm-daily-report-filters select:focus { border-color: #82a8d0; box-shadow: 0 0 0 3px rgba(40,100,173,.1); }
+.crm-daily-report-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 21px 20px; }
+.crm-daily-report-success { margin-right: auto; color: #34815c; font-size: 10px; font-weight: 700; }
+.crm-daily-report-error { margin: 0 21px 14px; color: #a84242; font-size: 11px; }
+.crm-daily-report-list { display: grid; gap: 14px; }
+.crm-daily-report-card-head > span { white-space: nowrap; }
+.crm-daily-report-card-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 22px; padding: 20px 21px; }
+.crm-daily-report-card-fields section h3 { margin: 0 0 5px; color: #7a8a9d; font-size: 10px; font-weight: 800; }
+.crm-daily-report-card-fields section p { margin: 0; color: #40566f; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.crm-daily-report-empty { padding: 40px 20px; border: 1px dashed #dfe6ed; border-radius: 10px; color: #8290a0; background: #fbfcfd; text-align: center; }
+.crm-daily-report-empty > span { display: block; margin-bottom: 10px; color: #8aa0ba; font-size: 25px; }
+.crm-daily-report-empty h2 { margin: 0 0 5px; color: #40566f; font-size: 14px; }
+.crm-daily-report-empty p { margin: 0; font-size: 11px; }
+.crm-daily-report-view > .crm-privacy-note { margin-top: 13px; }
+
 @media (max-width: 760px) {
   .crm-attendance-title-row { gap: 12px; }
   .crm-attendance-date { width: 100%; }
@@ -1048,4 +1078,15 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
   .crm-attendance-target-note { align-items: flex-start; padding: 13px; }
   .crm-attendance-table th, .crm-attendance-log th { padding-inline: 12px; }
   .crm-attendance-table td, .crm-attendance-log td { padding-inline: 12px; }
+  .crm-daily-report-title-row { gap: 12px; }
+  .crm-daily-report-date, .crm-daily-report-filters { width: 100%; }
+  .crm-daily-report-date input { width: 100%; }
+  .crm-daily-report-filters label { flex: 1 1 0; min-width: 0; }
+  .crm-daily-report-form-head, .crm-daily-report-card-head { align-items: flex-start; flex-direction: column; gap: 9px; padding: 15px; }
+  .crm-daily-report-owner { white-space: normal; }
+  .crm-daily-report-fields, .crm-daily-report-card-fields { grid-template-columns: 1fr; gap: 13px; padding: 15px; }
+  .crm-daily-report-field.wide { grid-column: auto; }
+  .crm-daily-report-actions { align-items: flex-start; flex-direction: column; padding: 0 15px 15px; }
+  .crm-daily-report-actions .crm-primary-button { width: 100%; }
+  .crm-daily-report-error { margin-inline: 15px; }
 }

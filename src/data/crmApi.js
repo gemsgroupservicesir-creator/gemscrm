@@ -2,6 +2,7 @@ const UPDATE_EVENTS = {
   leads: 'gems-crm-leads-updated',
   counselors: 'gems-crm-counselors-updated',
   attendance: 'gems-crm-attendance-updated',
+  dailyReports: 'gems-crm-daily-reports-updated',
   landingPages: 'gems-crm-landing-pages-updated',
 };
 
@@ -9,6 +10,7 @@ export const crmCache = {
   leads: [],
   counselors: [],
   attendance: [],
+  dailyReports: [],
   landingPages: [],
   siteCopy: new Map(),
   siteCollections: new Map(),
@@ -51,6 +53,7 @@ export async function loadCrmData() {
   announce('leads', data.leads || []);
   announce('counselors', data.counselors || []);
   announce('attendance', data.attendance || []);
+  announce('dailyReports', data.dailyReports || []);
   announce('landingPages', data.landingPages || []);
   if (data.siteContent) applySiteItems(data.siteContent);
   return data;

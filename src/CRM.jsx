@@ -7,6 +7,7 @@ import WebsiteEditor from './WebsiteEditor.jsx';
 import { LandingPageManager } from './LandingPages.jsx';
 import { appUrl } from './data/siteUrl.js';
 import { ATTENDANCE_TARGET_MS, getAttendanceForDay, getLocalDayKey, readAttendance, subscribeToAttendance } from './data/crmAttendance.js';
+import { readDailyReports, saveDailyWorkReport, subscribeToDailyReports } from './data/crmDailyReports.js';
 import { loadCrmData } from './data/crmApi.js';
 
 const statuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
@@ -111,6 +112,97 @@ function AttendancePanel({ counselors, counselorId, isAdmin }) {
       </table></div>}
     </section>
     <p className="crm-privacy-note">Attendance sessions are recorded on the server when a counselor signs in and out.</p>
+  </section>;
+}
+
+function DailyWorkReportPanel({ counselors, counselorId, isAdmin }) {
+  const [reports, setReports] = useState(() => readDailyReports());
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDayKey());
+  const [selectedCounselor, setSelectedCounselor] = useState('all');
+  const [draft, setDraft] = useState({ summary: '', studentOutreach: '', counseling: '', applicationWork: '', otherWork: '', challenges: '', nextSteps: '' });
+  const [saving, setSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
+  const [error, setError] = useState('');
+  const ownReport = reports.find((report) => report.counselorId === counselorId && report.date === selectedDate);
+
+  useEffect(() => subscribeToDailyReports(setReports), []);
+  useEffect(() => {
+    if (!isAdmin) {
+      setDraft({
+        summary: ownReport?.summary || '',
+        studentOutreach: ownReport?.studentOutreach || '',
+        counseling: ownReport?.counseling || '',
+        applicationWork: ownReport?.applicationWork || '',
+        otherWork: ownReport?.otherWork || '',
+        challenges: ownReport?.challenges || '',
+        nextSteps: ownReport?.nextSteps || '',
+      });
+      setSavedMessage('');
+      setError('');
+    }
+  }, [isAdmin, ownReport, selectedDate]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setSavedMessage('');
+    setError('');
+    try {
+      await saveDailyWorkReport({ ...draft, date: selectedDate });
+      setSavedMessage('Daily work report saved. You can update it again during the day.');
+    } catch (saveError) {
+      setError(saveError.message || 'Could not save the daily work report.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fields = [
+    { name: 'summary', label: 'Today’s work summary', hint: 'Summarize the main work completed today.', required: true },
+    { name: 'studentOutreach', label: 'Student calls and follow-ups', hint: 'Students contacted, responses, and follow-up details.' },
+    { name: 'counseling', label: 'Counseling sessions and consultations', hint: 'Consultations held and guidance provided.' },
+    { name: 'applicationWork', label: 'Applications and admissions progress', hint: 'Applications prepared, submitted, or progressed.' },
+    { name: 'otherWork', label: 'Other work completed', hint: 'Team, office, documentation, or campaign tasks.' },
+    { name: 'challenges', label: 'Challenges or pending work', hint: 'Anything blocked or waiting for a response.' },
+    { name: 'nextSteps', label: 'Follow-up plan for tomorrow', hint: 'Next actions to pick up on the next workday.' },
+  ];
+
+  if (isAdmin) {
+    const visibleReports = reports
+      .filter((report) => report.date === selectedDate && (selectedCounselor === 'all' || report.counselorId === selectedCounselor))
+      .sort((left, right) => String(left.counselorName || '').localeCompare(String(right.counselorName || '')));
+    return <section className="crm-daily-report-view" aria-labelledby="crm-daily-report-title">
+      <div className="crm-title-row crm-daily-report-title-row">
+        <div><span className="crm-kicker">GEMS GROUP SERVICES · TEAM</span><h1 id="crm-daily-report-title">Daily work reports</h1><p>Review counselors’ daily activities, completed work, and next steps.</p></div>
+        <div className="crm-daily-report-filters">
+          <label>Report date<input type="date" value={selectedDate} onChange={(event) => { if (event.target.value) setSelectedDate(event.target.value); }} /></label>
+          <label>Counselor<select value={selectedCounselor} onChange={(event) => setSelectedCounselor(event.target.value)}><option value="all">All counselors</option>{counselors.map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name}</option>)}</select></label>
+        </div>
+      </div>
+      <div className="crm-daily-report-list">
+        {visibleReports.map((report) => <article className="crm-daily-report-card" key={`${report.counselorId}-${report.date}`}>
+          <div className="crm-daily-report-card-head"><div><h2>{report.counselorName || 'Counselor'}</h2><p>Work report · {formatDate(`${report.date}T12:00:00`)}</p></div><span>Updated {formatNoteDate(report.updatedAt)}</span></div>
+          <div className="crm-daily-report-card-fields">{fields.filter((field) => report[field.name]).map((field) => <section key={field.name}><h3>{field.label}</h3><p>{report[field.name]}</p></section>)}</div>
+        </article>)}
+        {!visibleReports.length && <div className="crm-daily-report-empty"><span aria-hidden="true">▤</span><h2>No reports for this date</h2><p>Reports submitted by counselors will appear here.</p></div>}
+      </div>
+      <p className="crm-privacy-note">Daily reports are visible to CRM administrators and the counselor who submitted them.</p>
+    </section>;
+  }
+
+  return <section className="crm-daily-report-view" aria-labelledby="crm-daily-report-title">
+    <div className="crm-title-row crm-daily-report-title-row">
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · MY WORK</span><h1 id="crm-daily-report-title">Daily work report</h1><p>Record your student follow-ups, counseling, completed tasks, and next steps.</p></div>
+      <label className="crm-daily-report-date">Report date<input type="date" value={selectedDate} onChange={(event) => { if (event.target.value) setSelectedDate(event.target.value); }} /></label>
+    </div>
+    <form className="crm-daily-report-form" onSubmit={submit}>
+      <div className="crm-daily-report-form-head"><div><h2>{formatDate(`${selectedDate}T12:00:00`)}</h2><p>{ownReport ? `Last saved ${formatNoteDate(ownReport.updatedAt)} · Edit and save to update this day’s report.` : 'Add your work as you go, then save your report.'}</p></div><span className="crm-daily-report-owner">Visible to you and CRM admins</span></div>
+      <div className="crm-daily-report-fields">{fields.map((field) => <label className={field.name === 'summary' ? 'crm-daily-report-field wide' : 'crm-daily-report-field'} key={field.name}>
+        <span>{field.label}{field.required && <i>*</i>}</span><textarea name={field.name} value={draft[field.name]} onChange={(event) => { setDraft((current) => ({ ...current, [field.name]: event.target.value })); setSavedMessage(''); setError(''); }} placeholder={field.hint} maxLength={field.name === 'summary' ? 5000 : 4000} rows={field.name === 'summary' ? 4 : 3} required={field.required} />
+      </label>)}</div>
+      {error && <p className="crm-daily-report-error" role="alert">{error}</p>}
+      <div className="crm-daily-report-actions">{savedMessage && <span className="crm-daily-report-success" role="status">{savedMessage}</span>}<button className="crm-primary-button" type="submit" disabled={saving}>{saving ? 'Saving report…' : ownReport ? 'Update daily report' : 'Save daily report'}</button></div>
+    </form>
   </section>;
 }
 
@@ -490,6 +582,7 @@ function CRMWorkspace({ session, onLogout }) {
     { id: 'website', label: 'Website editor', allowed: isAdmin || currentCounselor?.permissions?.website },
     { id: 'landing-pages', label: 'Landing pages', allowed: isAdmin || currentCounselor?.permissions?.landingPages },
     { id: 'attendance', label: 'Attendance', allowed: true },
+    { id: 'daily-report', label: 'Daily work report', allowed: true },
     { id: 'counselors', label: 'Counselors', allowed: isAdmin },
   ].filter((tab) => tab.allowed);
   const currentTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : (tabs[0]?.id || 'no-access');
@@ -551,7 +644,7 @@ function CRMWorkspace({ session, onLogout }) {
         {workspaceError && <p className="crm-import-error" role="alert">{workspaceError}</p>}
         {dataReady && <>
         {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>}
-        {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
+        {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
           <div><span className="crm-kicker">GEMS GROUP SERVICES · ADMISSIONS</span><h1>{isAdmin ? 'Lead Center' : 'My Lead Center'}</h1><p>{isAdmin ? 'Review enquiries, follow up, and move students toward their next step.' : 'View and follow up on the leads assigned to your counselor account.'}</p></div>
           {isAdmin && <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}><span aria-hidden="true">＋</span> Add lead</button>}
