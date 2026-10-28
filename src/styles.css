@@ -729,6 +729,27 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-delete-credential { color: #a84242; }
 .crm-delete-counselor { color: #a84242; }
 .crm-delete-counselor:disabled { cursor: not-allowed; opacity: .55; }
+.crm-assignment-view { display: grid; gap: 17px; }
+.crm-assignment-explainer, .crm-assignment-existing { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 20px; border: 1px solid #e2e7f2; border-radius: 9px; background: #f7f8fd; }
+.crm-assignment-explainer { justify-content: flex-start; }
+.crm-assignment-explainer > span { display: grid; flex: 0 0 auto; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--blue-dark); background: #e8ebff; font-size: 17px; font-weight: 800; }
+.crm-assignment-explainer p, .crm-assignment-existing p { margin: 0; color: #697990; font-size: 11px; line-height: 1.6; }
+.crm-assignment-manager { overflow: hidden; }
+.crm-assignment-rule-list { display: grid; gap: 10px; padding: 17px 23px; }
+.crm-assignment-rule { display: grid; grid-template-columns: 30px minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(150px, 1fr) auto; align-items: end; gap: 12px; padding: 13px; border: 1px solid #e6eaf1; border-radius: 8px; background: #fff; }
+.crm-assignment-rule-number { display: grid; place-items: center; width: 28px; height: 28px; margin-bottom: 6px; border-radius: 50%; color: var(--blue-dark); background: #eef0ff; font-size: 10px; font-weight: 800; }
+.crm-assignment-rule > label { display: grid; min-width: 0; gap: 7px; color: #64758a; font-size: 10px; font-weight: 800; }
+.crm-assignment-rule select { width: 100%; min-height: 38px; padding: 8px 9px; border: 1px solid #dfe6ed; border-radius: 6px; outline: 0; color: #344b66; background: #fff; font-size: 10px; }
+.crm-assignment-rule select:focus { border-color: #82a8d0; box-shadow: 0 0 0 3px rgba(40,100,173,.1); }
+.crm-assignment-rule-actions { display: flex; align-items: center; gap: 5px; padding-bottom: 2px; }
+.crm-assignment-rule-actions .crm-row-edit { min-width: 28px; min-height: 30px; }
+.crm-assignment-rule-actions .crm-collection-remove { min-height: 30px; padding-inline: 8px; }
+.crm-assignment-empty { display: grid; justify-items: start; gap: 9px; padding: 16px; border: 1px dashed #d6ddea; border-radius: 8px; background: #fbfcfe; }
+.crm-assignment-empty h3, .crm-assignment-existing h2 { margin: 0; color: #1d3553; font-family: 'Avenir Next', Avenir, system-ui, sans-serif; font-size: 15px; }
+.crm-assignment-empty p { margin: 0; color: #8996a6; font-size: 10px; }
+.crm-assignment-warning { margin: 0 23px; padding: 11px 13px; border-radius: 6px; color: #80632c; background: #fcf6e9; font-size: 10px; }
+.crm-assignment-existing > div { display: grid; gap: 7px; }
+.crm-assignment-existing .crm-secondary-button { flex: 0 0 auto; min-height: 38px; }
 .crm-lead-image-preview { display: flex; align-items: center; gap: 10px; margin: -5px 0 17px; color: #687a8f; font-size: 11px; font-weight: 700; }
 .crm-lead-image-preview img { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; }
 .crm-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 21px; }
@@ -984,6 +1005,15 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
   .crm-counselor-manager-tools { width: 100%; justify-content: space-between; }
   .crm-counselor-manager-head p { line-height: 1.5; }
   .crm-counselor-manager > .crm-privacy-note { padding-inline: 15px; }
+  .crm-assignment-rule-list { padding: 13px; }
+  .crm-assignment-rule { grid-template-columns: 30px minmax(0, 1fr); align-items: start; padding: 11px; }
+  .crm-assignment-rule-number { grid-row: 1 / span 3; }
+  .crm-assignment-rule > label { grid-column: 2; }
+  .crm-assignment-rule-actions { grid-column: 2; justify-content: flex-start; }
+  .crm-assignment-explainer, .crm-assignment-existing { align-items: flex-start; flex-direction: column; padding: 14px; }
+  .crm-assignment-explainer { flex-direction: row; }
+  .crm-assignment-existing .crm-secondary-button { width: 100%; }
+  .crm-assignment-warning { margin-inline: 13px; }
   .crm-title-row.crm-editor-title-row { align-items: flex-start; }
   .crm-landing-layout { grid-template-columns: 1fr; }
   .crm-landing-list:has(.crm-landing-empty) { display: none; }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { coursesOfInterest } from './data/siteContent.js';
+import { coursesOfInterest, siteContent } from './data/siteContent.js';
 import { addLead, exportLeadsCsv, importLeadsCsv, readLeads, subscribeToLeads, updateLead } from './data/crmStore.js';
 import { readCounselors, saveCounselors, subscribeToCounselors } from './data/crmCounselors.js';
 import { authenticateCrm, createCrmAdmin, crmGetSession, crmHasAdmin, deleteCrmCounselor, deleteCounselorCredentials, setCounselorCredentials, logoutCrmAdmin } from './data/crmAuth.js';
@@ -8,6 +8,9 @@ import { LandingPageManager } from './LandingPages.jsx';
 import { appUrl } from './data/siteUrl.js';
 import { ATTENDANCE_TARGET_MS, getAttendanceForDay, getLocalDayKey, readAttendance, subscribeToAttendance } from './data/crmAttendance.js';
 import { readDailyReports, saveDailyWorkReport, subscribeToDailyReports } from './data/crmDailyReports.js';
+import { applyLeadAssignmentRules, readLeadAssignmentRules, saveLeadAssignmentRules, subscribeToLeadAssignmentRules } from './data/crmLeadAssignmentRules.js';
+import { readLandingPages, subscribeToLandingPages } from './data/landingPages.js';
+import { readSiteCollection, subscribeToSiteCollections } from './data/siteCopy.js';
 import { syncGoogleSheetLeads } from './data/crmSheets.js';
 import { loadCrmData } from './data/crmApi.js';
 
@@ -547,6 +550,118 @@ function CounselorManager({ counselors }) {
   </section>;
 }
 
+function LeadAssignerPanel({ counselors, leads }) {
+  const [rules, setRules] = useState(() => readLeadAssignmentRules());
+  const [draft, setDraft] = useState(() => readLeadAssignmentRules());
+  const [landingPages, setLandingPages] = useState(() => readLandingPages());
+  const [siteUniversities, setSiteUniversities] = useState(() => readSiteCollection('universities', siteContent.universities));
+  const [busy, setBusy] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const availableCounselors = counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads);
+  const courseOptions = [...new Set([
+    ...coursesOfInterest,
+    ...landingPages.flatMap((page) => Array.isArray(page.courseOptions) ? page.courseOptions : []),
+    ...leads.map((lead) => lead.course || lead.faculty || ''),
+  ].map((value) => String(value || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  const universityOptions = [...new Set([
+    ...siteUniversities.map((university) => university.name),
+    ...landingPages.flatMap((page) => Array.isArray(page.universityOptions) ? page.universityOptions : []),
+    ...leads.map((lead) => lead.university || ''),
+  ].map((value) => String(value || '').trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  const unassignedCount = leads.filter((lead) => !lead.assignedCounselorId).length;
+
+  useEffect(() => subscribeToLeadAssignmentRules(setRules), []);
+  useEffect(() => subscribeToLandingPages(setLandingPages), []);
+  useEffect(() => subscribeToSiteCollections(({ id, value }) => {
+    if (id === 'universities') setSiteUniversities(value ?? siteContent.universities);
+  }), []);
+  useEffect(() => setDraft(rules), [rules]);
+
+  function changeRule(id, key, value) {
+    setDraft((current) => current.map((rule) => rule.id === id ? { ...rule, [key]: value } : rule));
+    setNotice('');
+    setError('');
+  }
+
+  function addRule() {
+    const id = window.crypto?.randomUUID?.() || `assignment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setDraft((current) => [...current, { id, course: '', university: '', counselorId: '' }]);
+    setNotice('');
+    setError('');
+  }
+
+  function moveRule(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= draft.length) return;
+    setDraft((current) => {
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setNotice('');
+  }
+
+  async function saveRules(event) {
+    event.preventDefault();
+    setBusy('save');
+    setNotice('');
+    setError('');
+    try {
+      await saveLeadAssignmentRules(draft);
+      setNotice('Lead assignment rules saved. New unassigned leads will follow these rules.');
+    } catch (saveError) {
+      setError(saveError.message || 'Could not save lead assignment rules.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function applyRules() {
+    setBusy('apply');
+    setNotice('');
+    setError('');
+    try {
+      const result = await applyLeadAssignmentRules();
+      setNotice(`Assignment rules applied to ${result.assigned} unassigned ${result.assigned === 1 ? 'lead' : 'leads'}.`);
+    } catch (applyError) {
+      setError(applyError.message || 'Could not apply lead assignment rules.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return <section className="crm-assignment-view" aria-labelledby="lead-assigner-title">
+    <div className="crm-title-row">
+      <div><span className="crm-kicker">GEMS GROUP SERVICES · LEAD ROUTING</span><h1 id="lead-assigner-title">Lead assigner</h1><p>Route enquiries to counselors by the course and university students choose.</p></div>
+    </div>
+    <div className="crm-assignment-explainer"><span aria-hidden="true">↗</span><p>Rules are used for unassigned website, campaign, CSV, and Google Sheet leads. A counselor set directly on a landing page or lead keeps that assignment. Rules matching both course and university take priority; ties use the order below.</p></div>
+
+    <form className="crm-counselor-manager crm-assignment-manager" onSubmit={saveRules}>
+      <div className="crm-counselor-manager-head"><div><h2>Assignment rules</h2><p>Choose one or both student interests, then select the counselor who should receive matching leads.</p></div><div className="crm-counselor-manager-tools"><span>Admin only</span><button className="crm-primary-button" type="button" onClick={addRule}>＋ Add rule</button></div></div>
+      <div className="crm-assignment-rule-list">
+        {draft.map((rule, index) => <article className="crm-assignment-rule" key={rule.id}>
+          <div className="crm-assignment-rule-number">{index + 1}</div>
+          <label><span>Course</span><select value={rule.course || ''} onChange={(event) => changeRule(rule.id, 'course', event.target.value)}><option value="">Any course</option>{[...new Set([...courseOptions, ...(rule.course && !courseOptions.includes(rule.course) ? [rule.course] : [])])].map((course) => <option key={course} value={course}>{course}</option>)}</select></label>
+          <label><span>University/College</span><select value={rule.university || ''} onChange={(event) => changeRule(rule.id, 'university', event.target.value)}><option value="">Any university</option>{[...new Set([...universityOptions, ...(rule.university && !universityOptions.includes(rule.university) ? [rule.university] : [])])].map((university) => <option key={university} value={university}>{university}</option>)}</select></label>
+          <label><span>Assign to counselor</span><select value={rule.counselorId || ''} onChange={(event) => changeRule(rule.id, 'counselorId', event.target.value)} required><option value="" disabled>Choose a counselor</option>{availableCounselors.map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name}</option>)}</select></label>
+          <div className="crm-assignment-rule-actions"><button className="crm-row-edit" type="button" disabled={index === 0} onClick={() => moveRule(index, -1)} aria-label={`Move rule ${index + 1} up`}>↑</button><button className="crm-row-edit" type="button" disabled={index === draft.length - 1} onClick={() => moveRule(index, 1)} aria-label={`Move rule ${index + 1} down`}>↓</button><button className="crm-collection-remove" type="button" onClick={() => { setDraft((current) => current.filter((item) => item.id !== rule.id)); setNotice(''); setError(''); }}>Remove</button></div>
+        </article>)}
+        {!draft.length && <div className="crm-assignment-empty"><h3>No assignment rules yet</h3><p>Add a rule to route new leads automatically, such as MBA + VIT University → a selected counselor.</p><button className="crm-secondary-button" type="button" onClick={addRule}>＋ Add your first rule</button></div>}
+      </div>
+      {!availableCounselors.length && <p className="crm-assignment-warning">Add counselor sign-in credentials and enable lead access before creating assignment rules.</p>}
+      {error && <p className="crm-landing-error" role="alert">{error}</p>}
+      <div className="crm-editor-actions">{notice && <span className="crm-editor-save-message" role="status">{notice}</span>}<button className="crm-primary-button" type="submit" disabled={busy === 'save' || !availableCounselors.length}>{busy === 'save' ? 'Saving rules…' : 'Save rules'}</button></div>
+      <p className="crm-privacy-note">Existing counselor assignments are preserved. Use the action below to apply saved rules to leads that are currently unassigned.</p>
+    </form>
+
+    <section className="crm-assignment-existing">
+      <div><h2>Current unassigned leads</h2><p>{unassignedCount} {unassignedCount === 1 ? 'lead is' : 'leads are'} currently unassigned. Applying rules changes only unassigned leads; it does not move leads already assigned to a counselor.</p></div>
+      <button className="crm-secondary-button" type="button" onClick={applyRules} disabled={busy !== '' || !rules.length || !unassignedCount}>{busy === 'apply' ? 'Applying rules…' : 'Apply rules to unassigned leads'}</button>
+    </section>
+  </section>;
+}
+
 function CRMWorkspace({ session, onLogout }) {
   const [leads, setLeads] = useState(() => readLeads());
   const [counselors, setCounselors] = useState(() => readCounselors());
@@ -586,6 +701,7 @@ function CRMWorkspace({ session, onLogout }) {
     { id: 'landing-pages', label: 'Landing pages', allowed: isAdmin || currentCounselor?.permissions?.landingPages },
     { id: 'attendance', label: 'Attendance', allowed: true },
     { id: 'daily-report', label: 'Daily work report', allowed: true },
+    { id: 'lead-assigner', label: 'Lead assigner', allowed: isAdmin },
     { id: 'counselors', label: 'Counselors', allowed: isAdmin },
   ].filter((tab) => tab.allowed);
   const currentTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : (tabs[0]?.id || 'no-access');
@@ -639,7 +755,7 @@ function CRMWorkspace({ session, onLogout }) {
     setImportError('');
     try {
       const result = await syncGoogleSheetLeads(spreadsheetUrl.trim());
-      setImportNotice(`Google Sheet synced · ${result.created} new, ${result.updated} updated, ${result.skipped} skipped.`);
+      setImportNotice(`Google Sheet synced · ${result.created} new, ${result.updated} updated, ${result.skipped} skipped${result.assignedByRules ? ` · ${result.assignedByRules} assigned by rules` : ''}.`);
     } catch (error) {
       setImportError(error.message || 'Could not sync the Google Sheet.');
     } finally {
@@ -661,7 +777,7 @@ function CRMWorkspace({ session, onLogout }) {
         {workspaceError && <p className="crm-import-error" role="alert">{workspaceError}</p>}
         {dataReady && <>
         {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>}
-        {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
+        {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'lead-assigner' ? <LeadAssignerPanel counselors={counselors} leads={leads} /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
           <div><span className="crm-kicker">GEMS GROUP SERVICES · ADMISSIONS</span><h1>{isAdmin ? 'Lead Center' : 'My Lead Center'}</h1><p>{isAdmin ? 'Review enquiries, follow up, and move students toward their next step.' : 'View and follow up on the leads assigned to your counselor account.'}</p></div>
           {isAdmin && <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}><span aria-hidden="true">＋</span> Add lead</button>}

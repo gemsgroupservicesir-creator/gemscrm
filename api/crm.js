@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { createPublicLead, validLead } from '../lib/crmInput.js';
+import { matchLeadAssignmentRule, normalizeAssignmentValue } from '../lib/leadAssignment.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const SESSION_HOURS = 12;
@@ -11,6 +12,7 @@ const POST_ACTIONS = new Set([
   'lead-submit', 'login', 'bootstrap', 'logout', 'lead-create', 'lead-update', 'lead-import', 'attendance-end',
   'daily-report-save',
   'counselors-save', 'counselor-credentials', 'counselor-delete-credentials', 'counselor-delete',
+  'lead-assignment-rules-save', 'lead-assignment-apply',
   'landing-page-save', 'landing-page-delete', 'site-content-save-many', 'site-content-remove-many', 'site-content-save', 'site-content-remove',
 ]);
 let schemaPromise;
@@ -59,6 +61,10 @@ async function ensureSchema(sql) {
       data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS crm_leads_assignee_created_idx ON crm_leads (assigned_counselor_id, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS crm_lead_assignment_settings (
+      id TEXT PRIMARY KEY CHECK (id = 'default'), rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
     await sql`CREATE TABLE IF NOT EXISTS crm_landing_pages (
       id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, assigned_counselor_id TEXT NOT NULL DEFAULT '',
       published BOOLEAN NOT NULL DEFAULT FALSE, data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -191,6 +197,24 @@ async function insertLead(sql, lead) {
     VALUES (${lead.id}, ${lead.assignedCounselorId}, ${emailKey}, ${phoneKey}, ${JSON.stringify(lead)}::jsonb, ${lead.createdAt})`;
 }
 
+async function getLeadAssignmentContext(sql) {
+  const stored = await sql`SELECT rules FROM crm_lead_assignment_settings WHERE id = 'default' LIMIT 1`;
+  const counselors = await sql`SELECT id FROM crm_users WHERE role = 'counselor' AND disabled = FALSE AND password_hash IS NOT NULL AND COALESCE((permissions->>'leads')::boolean, false) = TRUE`;
+  return {
+    rules: Array.isArray(stored[0]?.rules) ? stored[0].rules : [],
+    counselorIds: new Set(counselors.map((counselor) => counselor.id)),
+  };
+}
+
+async function removeCounselorFromLeadAssignmentRules(sql, counselorId) {
+  const stored = await sql`SELECT rules FROM crm_lead_assignment_settings WHERE id = 'default' LIMIT 1`;
+  const rules = Array.isArray(stored[0]?.rules) ? stored[0].rules : [];
+  const remaining = rules.filter((rule) => rule.counselorId !== counselorId);
+  if (remaining.length === rules.length) return;
+  await sql`INSERT INTO crm_lead_assignment_settings (id, rules, updated_at) VALUES ('default', ${JSON.stringify(remaining)}::jsonb, NOW())
+    ON CONFLICT (id) DO UPDATE SET rules = EXCLUDED.rules, updated_at = NOW()`;
+}
+
 function isSameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return false;
@@ -286,6 +310,10 @@ export default async function handler(req, res) {
           const valid = await sql`SELECT id FROM crm_users WHERE id = ${assignedCounselorId} AND role = 'counselor' AND disabled = FALSE AND COALESCE((permissions->>'leads')::boolean, false) = TRUE AND password_hash IS NOT NULL LIMIT 1`;
           if (!valid[0]) assignedCounselorId = '';
         }
+      }
+      if (!assignedCounselorId) {
+        const assignment = await getLeadAssignmentContext(sql);
+        assignedCounselorId = matchLeadAssignmentRule(assignment.rules, body, assignment.counselorIds);
       }
       const lead = createPublicLead(body, { assignedCounselorId, source });
       await insertLead(sql, lead);
@@ -385,18 +413,68 @@ export default async function handler(req, res) {
         : await sql`SELECT r.counselor_id, r.report_date, r.data, r.updated_at, u.name AS counselor_name
           FROM crm_daily_reports r LEFT JOIN crm_users u ON u.id = r.counselor_id
           WHERE r.counselor_id = ${user.id} ORDER BY r.report_date DESC, r.updated_at DESC`;
+      const assignmentRuleRows = isAdmin
+        ? await sql`SELECT rules FROM crm_lead_assignment_settings WHERE id = 'default' LIMIT 1`
+        : [];
       return json(res, 200, {
         leads: leads.map((row) => row.data),
         counselors: counselorRows.map((row) => ({ id: row.id, username: row.username || '', name: row.name, permissions: row.permissions || {}, credential: row.password_hash ? { enabled: true } : null })),
         attendance: attendanceRows.map((row) => ({ id: row.id, counselorId: row.counselor_id, loggedInAt: row.logged_in_at, loggedOutAt: row.logged_out_at || '' })),
         dailyReports: dailyReportRows.map((row) => ({ ...row.data, counselorId: row.counselor_id, counselorName: row.counselor_name || 'Counselor', date: String(row.report_date).slice(0, 10), updatedAt: row.updated_at })),
         landingPages: pageRows.map((row) => row.data),
+        leadAssignmentRules: Array.isArray(assignmentRuleRows[0]?.rules) ? assignmentRuleRows[0].rules : [],
         siteContent: siteRows.map((row) => ({ id: row.id, kind: row.kind, value: row.value })),
       });
     }
 
     if (req.method === 'POST') {
       const body = parseBody(req);
+      if (action === 'lead-assignment-rules-save') {
+        if (session.user.role !== 'admin') fail(403, 'Administrator access is required.');
+        const input = Array.isArray(body.rules) ? body.rules.slice(0, 200) : [];
+        const rules = input.map((item, index) => ({
+          id: String(item?.id || randomBytes(16).toString('hex')).slice(0, 100),
+          course: String(item?.course || '').trim().slice(0, 160),
+          university: String(item?.university || '').trim().slice(0, 180),
+          counselorId: String(item?.counselorId || '').trim().slice(0, 100),
+          order: index,
+        }));
+        const uniqueRules = new Set();
+        for (const rule of rules) {
+          if (!rule.counselorId) fail(400, 'Choose a counselor for every assignment rule.');
+          const key = `${normalizeAssignmentValue(rule.course)}\u0000${normalizeAssignmentValue(rule.university)}`;
+          if (uniqueRules.has(key)) fail(400, 'Each course and university combination can have only one rule.');
+          uniqueRules.add(key);
+        }
+        const counselorIds = [...new Set(rules.map((rule) => rule.counselorId))];
+        if (counselorIds.length) {
+          const validCounselors = await sql.query(
+            `SELECT id FROM crm_users WHERE id = ANY($1::text[]) AND role = 'counselor' AND disabled = FALSE
+              AND password_hash IS NOT NULL AND COALESCE((permissions->>'leads')::boolean, false) = TRUE`,
+            [counselorIds],
+          );
+          if (validCounselors.length !== counselorIds.length) fail(400, 'Choose active counselors with sign-in credentials and lead access.');
+        }
+        const savedRules = rules.map(({ order, ...rule }) => rule);
+        await sql`INSERT INTO crm_lead_assignment_settings (id, rules, updated_at) VALUES ('default', ${JSON.stringify(savedRules)}::jsonb, NOW())
+          ON CONFLICT (id) DO UPDATE SET rules = EXCLUDED.rules, updated_at = NOW()`;
+        return json(res, 200, { rules: savedRules });
+      }
+      if (action === 'lead-assignment-apply') {
+        if (session.user.role !== 'admin') fail(403, 'Administrator access is required.');
+        const assignment = await getLeadAssignmentContext(sql);
+        const unassigned = await sql`SELECT id, data FROM crm_leads WHERE assigned_counselor_id = '' ORDER BY created_at DESC`;
+        let assigned = 0;
+        for (const row of unassigned) {
+          const counselorId = matchLeadAssignmentRule(assignment.rules, row.data, assignment.counselorIds);
+          if (!counselorId) continue;
+          const updated = await sql`UPDATE crm_leads SET assigned_counselor_id = ${counselorId},
+            data = jsonb_set(data, '{assignedCounselorId}', ${JSON.stringify(counselorId)}::jsonb, true)
+            WHERE id = ${row.id} AND assigned_counselor_id = '' RETURNING id`;
+          assigned += updated.length;
+        }
+        return json(res, 200, { assigned, checked: unassigned.length });
+      }
       if (action === 'daily-report-save') {
         if (session.user.role !== 'counselor') fail(403, 'Daily work reports are for counselor accounts.');
         const value = body.report && typeof body.report === 'object' ? body.report : {};
@@ -423,6 +501,10 @@ export default async function handler(req, res) {
         requireSection(session, 'leads');
         if (session.user.role !== 'admin') fail(403, 'Only administrators can add leads manually.');
         const lead = validLead(body);
+        if (!lead.assignedCounselorId) {
+          const assignment = await getLeadAssignmentContext(sql);
+          lead.assignedCounselorId = matchLeadAssignmentRule(assignment.rules, lead, assignment.counselorIds);
+        }
         if (lead.assignedCounselorId) {
           const assigned = await sql`SELECT id FROM crm_users WHERE id = ${lead.assignedCounselorId} AND role = 'counselor' AND disabled = FALSE AND COALESCE((permissions->>'leads')::boolean, false) = TRUE LIMIT 1`;
           if (!assigned[0]) fail(400, 'Choose an active counselor with lead access.');
@@ -454,6 +536,7 @@ export default async function handler(req, res) {
         const rows = Array.isArray(body.leads) ? body.leads.slice(0, 500) : [];
         if (!rows.length) fail(400, 'The CSV does not contain any valid leads.');
         const stored = session.user.role === 'admin' ? await sql`SELECT email_key, phone_key FROM crm_leads` : await sql`SELECT email_key, phone_key FROM crm_leads WHERE assigned_counselor_id = ${session.user.id}`;
+        const assignment = session.user.role === 'admin' ? await getLeadAssignmentContext(sql) : null;
         const emails = new Set(stored.map((row) => row.email_key).filter(Boolean));
         const phones = new Set(stored.map((row) => row.phone_key).filter(Boolean));
         let imported = 0, skipped = 0;
@@ -466,6 +549,9 @@ export default async function handler(req, res) {
             if (session.user.role === 'admin' && lead.assignedCounselorId) {
               const assigned = await sql`SELECT id FROM crm_users WHERE id = ${lead.assignedCounselorId} AND role = 'counselor' AND disabled = FALSE AND COALESCE((permissions->>'leads')::boolean, false) = TRUE LIMIT 1`;
               if (!assigned[0]) lead.assignedCounselorId = '';
+            }
+            if (session.user.role === 'admin' && !lead.assignedCounselorId && assignment) {
+              lead.assignedCounselorId = matchLeadAssignmentRule(assignment.rules, lead, assignment.counselorIds);
             }
             lead.id = randomBytes(16).toString('hex');
             await insertLead(sql, lead);
@@ -492,6 +578,7 @@ export default async function handler(req, res) {
           if (!permissions.leads) {
             await sql`UPDATE crm_leads SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
             await sql`UPDATE crm_landing_pages SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
+            await removeCounselorFromLeadAssignmentRules(sql, id);
           }
         }
         return json(res, 200, { ok: true });
@@ -525,6 +612,7 @@ export default async function handler(req, res) {
         }
         await sql`UPDATE crm_attendance SET logged_out_at = COALESCE(logged_out_at, NOW()) WHERE counselor_id = ${id}`;
         await sql`DELETE FROM crm_sessions WHERE user_id = ${id}`;
+        await removeCounselorFromLeadAssignmentRules(sql, id);
         return json(res, 200, { ok: true });
       }
       if (action === 'landing-page-save' || action === 'landing-page-delete') {

@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { GoogleAuth } from 'google-auth-library';
 import { validLead } from '../lib/crmInput.js';
+import { matchLeadAssignmentRule } from '../lib/leadAssignment.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const DEFAULT_SPREADSHEET_ID = '1z18sHEe4cH8FOfyfu2xy-iKPIUZovpPJ-6tf8d4V048';
@@ -125,6 +126,10 @@ function makeAnswerList(headers, row) {
 
 async function syncRows(sql, sheet) {
   const { spreadsheetId, sheetGid, sheetTitle, rows } = sheet;
+  await sql`CREATE TABLE IF NOT EXISTS crm_lead_assignment_settings (
+    id TEXT PRIMARY KEY CHECK (id = 'default'), rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
   if (!rows.length || !rows[0]?.some((cell) => String(cell || '').trim())) {
     throw Object.assign(new Error('The selected sheet tab has no header row.'), { status: 400 });
   }
@@ -195,6 +200,9 @@ async function syncRows(sql, sheet) {
   const byEmail = new Map(candidateRows.filter((item) => item.email_key).map((item) => [item.email_key, item]));
   const byPhone = new Map(candidateRows.filter((item) => item.phone_key).map((item) => [item.phone_key, item]));
   const counselorRows = await sql`SELECT id, name, username FROM crm_users WHERE role = 'counselor' AND disabled = FALSE AND password_hash IS NOT NULL AND COALESCE((permissions->>'leads')::boolean, false) = TRUE`;
+  const assignmentRuleRows = await sql`SELECT rules FROM crm_lead_assignment_settings WHERE id = 'default' LIMIT 1`;
+  const assignmentRules = Array.isArray(assignmentRuleRows[0]?.rules) ? assignmentRuleRows[0].rules : [];
+  const eligibleCounselorIds = new Set(counselorRows.map((counselor) => counselor.id));
   const counselorByName = new Map();
   counselorRows.forEach((item) => [item.name, item.username].forEach((value) => {
     const key = String(value || '').trim().toLowerCase();
@@ -207,6 +215,7 @@ async function syncRows(sql, sheet) {
   const upserts = new Map();
   const mappingWrites = new Map();
   let skipped = 0;
+  let assignedByRules = 0;
 
   for (const row of dataRows) {
     const name = safeCell(row, columns.name);
@@ -233,7 +242,10 @@ async function syncRows(sql, sheet) {
     const sheetStatus = safeCell(row, columns.status);
     const status = !existing && VALID_STATUSES.has(sheetStatus) ? sheetStatus : previous.status;
     const counselorName = safeCell(row, columns.counselor).toLowerCase();
-    const counselorId = existing?.assigned_counselor_id || counselorByName.get(counselorName) || '';
+    const directCounselorId = existing?.assigned_counselor_id || counselorByName.get(counselorName) || '';
+    const ruleCounselorId = directCounselorId ? '' : matchLeadAssignmentRule(assignmentRules, { course, university }, eligibleCounselorIds);
+    const counselorId = directCounselorId || ruleCounselorId;
+    if (ruleCounselorId) assignedByRules += 1;
     const answers = makeAnswerList(answerHeaders, row);
     const answerLabels = new Set(answers.map((item) => item.label.toLowerCase()));
     const formAnswers = [
@@ -302,6 +314,7 @@ async function syncRows(sql, sheet) {
     created: [...upserts.values()].filter((item) => !candidateRows.some((candidate) => candidate.id === item.id)).length,
     updated: [...upserts.values()].filter((item) => candidateRows.some((candidate) => candidate.id === item.id)).length,
     skipped,
+    assignedByRules,
     syncedAt: new Date().toISOString(),
   };
 }
