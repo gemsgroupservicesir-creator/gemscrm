@@ -18,6 +18,12 @@
       ]
     }
   ],
+  "crons": [
+    {
+      "path": "/api/google-sheets-sync",
+      "schedule": "0 0 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
