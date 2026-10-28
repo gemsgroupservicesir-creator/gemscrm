@@ -58,7 +58,34 @@ function safeCell(row, index) {
   return index < 0 ? '' : String(row[index] ?? '').trim();
 }
 
-async function getGoogleSheetRows() {
+function parseBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body); } catch { throw Object.assign(new Error('Invalid request body.'), { status: 400 }); }
+  }
+  return {};
+}
+
+function parseSpreadsheetReference(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.length > 2048) throw Object.assign(new Error('Paste a valid Google Sheets link.'), { status: 400 });
+  let url;
+  try { url = new URL(raw); } catch { throw Object.assign(new Error('Paste a valid Google Sheets link.'), { status: 400 }); }
+  if (url.protocol !== 'https:' || url.hostname !== 'docs.google.com') {
+    throw Object.assign(new Error('Use an https://docs.google.com/spreadsheets link.'), { status: 400 });
+  }
+  const match = url.pathname.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})(?:\/|$)/);
+  if (!match) throw Object.assign(new Error('The link must point to a Google spreadsheet.'), { status: 400 });
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const rawGid = url.searchParams.get('gid') || hashParams.get('gid');
+  const sheetGid = rawGid === null ? null : Number(rawGid);
+  if (sheetGid !== null && (!Number.isInteger(sheetGid) || sheetGid < 0)) {
+    throw Object.assign(new Error('The Google Sheets link has an invalid tab ID.'), { status: 400 });
+  }
+  return { spreadsheetId: match[1], sheetGid };
+}
+
+async function getGoogleSheetRows(reference = {}, lastColumn = 'ZZ') {
   const credentialJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!credentialJson) throw Object.assign(new Error('Add GOOGLE_SERVICE_ACCOUNT_JSON in Vercel to connect the read-only Google Sheets service account.'), { status: 503 });
   let credentials;
@@ -67,23 +94,25 @@ async function getGoogleSheetRows() {
   if (!credentials.client_email || !credentials.private_key) {
     throw Object.assign(new Error('The Google service account JSON must include client_email and private_key.'), { status: 503 });
   }
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
-  const sheetGid = Number(process.env.GOOGLE_SHEETS_GID || DEFAULT_SHEET_GID);
-  if (!Number.isInteger(sheetGid) || sheetGid < 0) throw Object.assign(new Error('GOOGLE_SHEETS_GID must be a non-negative sheet tab ID.'), { status: 503 });
+  const spreadsheetId = reference.spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+  const configuredGid = Number(process.env.GOOGLE_SHEETS_GID || DEFAULT_SHEET_GID);
+  if (!Number.isInteger(configuredGid) || configuredGid < 0) throw Object.assign(new Error('GOOGLE_SHEETS_GID must be a non-negative sheet tab ID.'), { status: 503 });
+  const requestedGid = reference.sheetGid ?? (spreadsheetId === (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID) ? configuredGid : null);
 
   const auth = new GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
   const client = await auth.getClient();
   const root = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}`;
   const metadataResponse = await client.request({ url: `${root}?fields=sheets.properties(sheetId,title)` });
-  const sheet = (metadataResponse.data?.sheets || []).map((item) => item.properties || {}).find((item) => Number(item.sheetId) === sheetGid);
+  const sheets = (metadataResponse.data?.sheets || []).map((item) => item.properties || {});
+  const sheet = requestedGid === null ? sheets[0] : sheets.find((item) => Number(item.sheetId) === requestedGid);
   if (!sheet?.title) throw Object.assign(new Error('The configured Google Sheet tab was not found. Check GOOGLE_SHEETS_GID.'), { status: 404 });
 
   const escapedTitle = sheet.title.replaceAll("'", "''");
-  const range = `'${escapedTitle}'!A:ZZ`;
+  const range = `'${escapedTitle}'!A:${lastColumn}`;
   const valuesResponse = await client.request({
     url: `${root}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`,
   });
-  return { spreadsheetId, sheetGid, sheetTitle: sheet.title, rows: valuesResponse.data?.values || [] };
+  return { spreadsheetId, sheetGid: Number(sheet.sheetId), sheetTitle: sheet.title, rows: valuesResponse.data?.values || [] };
 }
 
 function makeAnswerList(headers, row) {
@@ -101,8 +130,18 @@ async function syncRows(sql, sheet) {
   }
   if (rows.length > 5001) throw Object.assign(new Error('This sheet has more than 5,000 data rows. Split it into smaller tabs before syncing.'), { status: 413 });
 
-  const headers = rows[0].map((cell) => String(cell || '').trim());
-  const normalizedHeaders = headers.map(normalizeHeader);
+  const initialHeaders = rows[0].map((cell) => String(cell || '').trim());
+  let headers = initialHeaders;
+  let dataRows = rows.slice(1);
+  let normalizedHeaders = headers.map(normalizeHeader);
+  const firstRowLooksLikeLead = Boolean(initialHeaders[0]) && initialHeaders.some((cell) => /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(cell) || String(cell).replace(/\D/g, '').length >= 9);
+  const recognizedHeaderCount = normalizedHeaders.filter((header) => KNOWN_HEADERS.has(header)).length;
+  const hasHeaderRow = recognizedHeaderCount > 0 && !firstRowLooksLikeLead;
+  if (!hasHeaderRow) {
+    headers = ['Name', 'Email', 'Phone', 'Course', 'University'];
+    normalizedHeaders = headers.map(normalizeHeader);
+    dataRows = rows;
+  }
   const find = (...aliases) => normalizedHeaders.findIndex((header) => aliases.includes(header));
   const columns = {
     externalId: find('id', 'leadid', 'studentid', 'recordid'),
@@ -117,13 +156,25 @@ async function syncRows(sql, sheet) {
     createdAt: find('createdat', 'date', 'submittedat', 'timestamp'),
     notes: find('notes'),
   };
+  if (columns.name < 0) columns.name = 0;
+  if (columns.email < 0 && columns.phone < 0) {
+    const sampleRows = dataRows.slice(0, 25);
+    for (let index = 1; index < Math.max(1, headers.length); index += 1) {
+      const sampleValues = sampleRows.map((row) => safeCell(row, index)).filter(Boolean);
+      if (columns.email < 0 && sampleValues.some((value) => /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(value))) columns.email = index;
+      if (columns.phone < 0 && sampleValues.some((value) => value.replace(/\D/g, '').length >= 9 && !value.includes('@'))) columns.phone = index;
+    }
+    if (columns.email < 0 && columns.phone < 0) { columns.email = 1; columns.phone = 2; }
+  }
+  if (columns.course < 0) columns.course = 3;
+  if (columns.university < 0) columns.university = 4;
   if (columns.name < 0 || (columns.email < 0 && columns.phone < 0)) {
     throw Object.assign(new Error('Add a Name column and at least one Email or Phone column to the sheet.'), { status: 400 });
   }
 
   const existingMappings = await sql`SELECT record_key, lead_id FROM crm_sheet_sync_rows WHERE spreadsheet_id = ${spreadsheetId} AND sheet_gid = ${sheetGid}`;
   const mappingByKey = new Map(existingMappings.map((item) => [item.record_key, item.lead_id]));
-  const rowCandidates = rows.slice(1).map((row) => ({
+  const rowCandidates = dataRows.map((row) => ({
     row,
     email: safeCell(row, columns.email),
     phone: safeCell(row, columns.phone),
@@ -157,7 +208,7 @@ async function syncRows(sql, sheet) {
   const mappingWrites = new Map();
   let skipped = 0;
 
-  for (const row of rows.slice(1)) {
+  for (const row of dataRows) {
     const name = safeCell(row, columns.name);
     const email = safeCell(row, columns.email);
     const phone = safeCell(row, columns.phone);
@@ -247,7 +298,7 @@ async function syncRows(sql, sheet) {
   }
   return {
     sheetTitle,
-    rowsSeen: Math.max(0, rows.length - 1),
+    rowsSeen: dataRows.length,
     created: [...upserts.values()].filter((item) => !candidateRows.some((candidate) => candidate.id === item.id)).length,
     updated: [...upserts.values()].filter((item) => candidateRows.some((candidate) => candidate.id === item.id)).length,
     skipped,
@@ -264,22 +315,37 @@ export default async function handler(req, res) {
 
   const sql = neon(databaseUrl);
   try {
+    if (req.method === 'POST') {
+      const origin = req.headers.origin;
+      if (!origin) return send(res, 403, { error: 'Request origin could not be verified.' });
+      try { if (new URL(origin).host !== req.headers.host) return send(res, 403, { error: 'Request origin could not be verified.' }); }
+      catch { return send(res, 403, { error: 'Request origin could not be verified.' }); }
+    }
     if (req.method === 'GET') {
       if (!cronSecret) return send(res, 503, { error: 'Add CRON_SECRET in Vercel to enable scheduled Google Sheets sync.' });
       if (!isCron) return send(res, 401, { error: 'Unauthorized.' });
     } else {
+      const body = parseBody(req);
       const token = cookieValue(req, SESSION_COOKIE);
       if (!token) return send(res, 401, { error: 'Sign in as CRM admin to sync the sheet.' });
       const tokenHash = createHash('sha256').update(token).digest('hex');
       const sessions = await sql`SELECT u.id, u.role FROM crm_sessions s JOIN crm_users u ON u.id = s.user_id WHERE s.token_hash = ${tokenHash} AND s.expires_at > NOW() AND u.disabled = FALSE LIMIT 1`;
       if (sessions[0]?.role !== 'admin') return send(res, 403, { error: 'Administrator access is required to sync the Google Sheet.' });
+      const reference = body.spreadsheetUrl ? parseSpreadsheetReference(body.spreadsheetUrl) : {};
+      const sheet = await getGoogleSheetRows(reference, 'E');
+      await sql`CREATE TABLE IF NOT EXISTS crm_sheet_sync_rows (
+        spreadsheet_id TEXT NOT NULL, sheet_gid INTEGER NOT NULL, record_key TEXT NOT NULL, lead_id TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (spreadsheet_id, sheet_gid, record_key)
+      )`;
+      const result = await syncRows(sql, sheet);
+      return send(res, 200, { ok: true, ...result });
     }
 
     await sql`CREATE TABLE IF NOT EXISTS crm_sheet_sync_rows (
       spreadsheet_id TEXT NOT NULL, sheet_gid INTEGER NOT NULL, record_key TEXT NOT NULL, lead_id TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (spreadsheet_id, sheet_gid, record_key)
     )`;
-    const sheet = await getGoogleSheetRows();
+    const sheet = await getGoogleSheetRows({ spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID, sheetGid: Number(process.env.GOOGLE_SHEETS_GID || DEFAULT_SHEET_GID) }, 'E');
     const result = await syncRows(sql, sheet);
     return send(res, 200, { ok: true, ...result });
   } catch (error) {

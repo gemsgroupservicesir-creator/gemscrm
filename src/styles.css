@@ -544,6 +544,8 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-import-notice, .crm-import-error { margin: 0 24px 12px; padding: 9px 11px; border-radius: 6px; font-size: 10px; line-height: 1.5; }
 .crm-import-notice { color: #347450; background: #edf8f1; }
 .crm-import-error { color: #a84242; background: #fff1ef; }
+.crm-sheet-link-input { width: min(310px, 30vw); min-width: 220px; height: 41px; padding: 0 11px; border: 1px solid #dce4ed; border-radius: 7px; outline-color: var(--blue); color: var(--navy); background: #fff; font-size: 11px; }
+.crm-sheet-link-input::placeholder { color: #9aa7b7; }
 .crm-view-toggle { display: inline-flex; padding: 3px; border: 1px solid #e0e6ee; border-radius: 7px; background: #f7f9fc; }
 .crm-view-toggle button { min-height: 31px; padding: 0 11px; border: 0; border-radius: 5px; color: #748397; background: transparent; font-size: 10px; font-weight: 800; }
 .crm-view-toggle button.active { color: var(--blue); background: #fff; box-shadow: 0 1px 4px rgba(25,52,83,.12); }
@@ -937,6 +939,7 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
   .crm-panel-heading p { max-width: 200px; line-height: 1.5; }
   .crm-leads-panel-actions { width: 100%; justify-content: space-between; }
   .crm-export-button { min-height: 35px; padding: 0 10px; font-size: 10px; white-space: nowrap; }
+  .crm-sheet-link-input { flex: 1 1 100%; width: 100%; min-width: 0; }
   .crm-toolbar { align-items: stretch; flex-direction: column; gap: 10px; padding: 0 15px 14px; }
   .crm-lead-stage-tabs { padding-inline: 12px; }
   .crm-lead-stage-tabs button { padding-inline: 9px; }

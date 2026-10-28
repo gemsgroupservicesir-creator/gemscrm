@@ -563,6 +563,7 @@ function CRMWorkspace({ session, onLogout }) {
   const [importNotice, setImportNotice] = useState('');
   const [importError, setImportError] = useState('');
   const [syncingSheet, setSyncingSheet] = useState(false);
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState('https://docs.google.com/spreadsheets/d/1z18sHEe4cH8FOfyfu2xy-iKPIUZovpPJ-6tf8d4V048/edit?gid=223624821#gid=223624821');
   const isAdmin = session.role === 'admin';
 
   useEffect(() => subscribeToLeads(setLeads), []);
@@ -637,7 +638,7 @@ function CRMWorkspace({ session, onLogout }) {
     setImportNotice('');
     setImportError('');
     try {
-      const result = await syncGoogleSheetLeads();
+      const result = await syncGoogleSheetLeads(spreadsheetUrl.trim());
       setImportNotice(`Google Sheet synced · ${result.created} new, ${result.updated} updated, ${result.skipped} skipped.`);
     } catch (error) {
       setImportError(error.message || 'Could not sync the Google Sheet.');
@@ -674,7 +675,7 @@ function CRMWorkspace({ session, onLogout }) {
         </section>
 
         <section className="crm-leads-panel">
-          <div className="crm-panel-heading"><div><h2>Leads</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'in your workspace' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'center' ? 'active' : ''} aria-pressed={leadView === 'center'} onClick={() => setLeadView('center')}>Lead center</button><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Pipeline</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>Table</button></div>{isAdmin && <button className="crm-export-button" type="button" onClick={syncSheet} disabled={syncingSheet}>{syncingSheet ? 'Syncing sheet…' : 'Sync Google Sheet'}</button>}<input ref={importInputRef} className="crm-hidden-file-input" type="file" accept=".csv,text/csv" onChange={importLeadFile} /><button className="crm-export-button" type="button" onClick={() => importInputRef.current?.click()}>Import CSV</button><button className="crm-export-button" type="button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
+          <div className="crm-panel-heading"><div><h2>Leads</h2><p>{accessibleLeads.length ? `${accessibleLeads.length} ${accessibleLeads.length === 1 ? 'lead' : 'leads'} ${isAdmin ? 'in your workspace' : 'assigned to you'}` : isAdmin ? 'Website enquiries appear here automatically.' : 'Landing page leads assigned to you will appear here.'}</p></div><div className="crm-leads-panel-actions"><div className="crm-view-toggle" role="group" aria-label="Choose lead layout"><button type="button" className={leadView === 'center' ? 'active' : ''} aria-pressed={leadView === 'center'} onClick={() => setLeadView('center')}>Lead center</button><button type="button" className={leadView === 'board' ? 'active' : ''} aria-pressed={leadView === 'board'} onClick={() => setLeadView('board')}>Pipeline</button><button type="button" className={leadView === 'list' ? 'active' : ''} aria-pressed={leadView === 'list'} onClick={() => setLeadView('list')}>Table</button></div>{isAdmin && <><input className="crm-sheet-link-input" type="url" aria-label="Google Sheets link" value={spreadsheetUrl} onChange={(event) => setSpreadsheetUrl(event.target.value)} placeholder="Paste Google Sheets link" /> <button className="crm-export-button" type="button" onClick={syncSheet} disabled={syncingSheet || !spreadsheetUrl.trim()}>{syncingSheet ? 'Syncing sheet…' : 'Sync Google Sheet'}</button></>}<input ref={importInputRef} className="crm-hidden-file-input" type="file" accept=".csv,text/csv" onChange={importLeadFile} /><button className="crm-export-button" type="button" onClick={() => importInputRef.current?.click()}>Import CSV</button><button className="crm-export-button" type="button" onClick={() => exportLeadsCsv(filteredLeads, counselors)} disabled={!filteredLeads.length}><span aria-hidden="true">↓</span> Export CSV</button></div></div>
           <nav className="crm-lead-stage-tabs" aria-label="Filter leads by stage">
             <button type="button" className={statusFilter === 'All leads' ? 'active' : ''} aria-pressed={statusFilter === 'All leads'} onClick={() => setStatusFilter('All leads')}>All leads <span>{accessibleLeads.length}</span></button>
             {statuses.map((status) => {
