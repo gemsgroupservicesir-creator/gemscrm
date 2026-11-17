@@ -134,7 +134,14 @@ function BannerCarousel() {
 function UniversityRail({ editMode }) {
   const universities = useSiteCollection('universities', siteContent.universities);
   if (!universities.length) return null;
-  return <div className="university-rail"><div className="container rail-inner"><span className="rail-label"><EditableText id="university-rail-label" value="Institutions to explore" editMode={editMode} /></span><div className="rail-logos">{universities.slice(0, 6).map((university, index) => <div className="rail-logo" key={university.id || index}>{university.image && <img src={appUrl(university.image)} alt={`${university.name} logo`} />}</div>)}</div></div></div>;
+  const featuredUniversities = universities.slice(0, 6);
+  return <div className="university-rail"><div className="container rail-inner">
+    <span className="rail-label"><EditableText id="university-rail-label" value="Institutions to explore" editMode={editMode} /></span>
+    <div className="rail-logos" role="group" aria-label="Institutions to explore">
+      <div className="rail-track">{featuredUniversities.map((university, index) => <div className="rail-logo" key={university.id || index}>{university.image && <img src={appUrl(university.image)} alt={`${university.name} logo`} />}</div>)}</div>
+      <div className="rail-track rail-track-copy" aria-hidden="true">{featuredUniversities.map((university, index) => <div className="rail-logo" key={`copy-${university.id || index}`}>{university.image && <img src={appUrl(university.image)} alt="" />}</div>)}</div>
+    </div>
+  </div></div>;
 }
 
 function InquiryForm({ editMode }) {
@@ -438,10 +445,10 @@ function App() {
     <div className={`site ${editMode ? 'site-editing' : ''}`}>
       <Header editMode={editMode} />
       <main>
-        <BannerCarousel />
-        <UniversityRail editMode={editMode} />
         <Hero editMode={editMode} />
         <HighlightCards editMode={editMode} />
+        <UniversityRail editMode={editMode} />
+        <BannerCarousel />
         <IntroSection editMode={editMode} />
         <ServicesSection editMode={editMode} />
         <AchievementSection editMode={editMode} />
