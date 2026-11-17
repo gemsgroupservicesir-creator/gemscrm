@@ -4,6 +4,7 @@ import { GoogleAuth } from 'google-auth-library';
 import { validLead } from '../lib/crmInput.js';
 import { matchLeadAssignmentRule } from '../lib/leadAssignment.js';
 import { runLeadAutomations } from '../lib/crmAutomation.js';
+import { enqueueWhatsappNurture } from '../lib/whatsappNurture.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const DEFAULT_SPREADSHEET_ID = '1z18sHEe4cH8FOfyfu2xy-iKPIUZovpPJ-6tf8d4V048';
@@ -14,6 +15,7 @@ const KNOWN_HEADERS = new Set([
   'email', 'emailaddress', 'gmail', 'gmailaddress', 'emailid', 'phone', 'phonenumber', 'mobile', 'mobilenumber', 'contactnumber',
   'course', 'courseofinterest', 'faculty', 'university', 'universityname', 'college', 'collegename', 'universitycollege', 'institution',
   'status', 'assignedcounselor', 'counselor', 'counselorname', 'source', 'createdat', 'date', 'submittedat', 'timestamp', 'notes',
+  'whatsappoptin', 'whatsappconsent', 'whatsapppermission', 'whatsappfollowupconsent',
 ]);
 
 function send(res, status, value) {
@@ -58,6 +60,10 @@ function parseDate(value) {
 
 function safeCell(row, index) {
   return index < 0 ? '' : String(row[index] ?? '').trim();
+}
+
+function parseWhatsappConsent(value) {
+  return /^(?:yes|y|true|1|on|opted ?in|consented)$/i.test(String(value || '').trim());
 }
 
 function parseBody(req) {
@@ -172,6 +178,7 @@ async function syncRows(sql, sheet) {
     source: find('source'),
     createdAt: find('createdat', 'date', 'submittedat', 'timestamp'),
     notes: find('notes'),
+    whatsappOptIn: find('whatsappoptin', 'whatsappconsent', 'whatsapppermission', 'whatsappfollowupconsent'),
   };
   if (columns.name < 0) columns.name = 0;
   if (columns.email < 0 && columns.phone < 0) {
@@ -225,6 +232,7 @@ async function syncRows(sql, sheet) {
   const seenKeys = new Set();
   const seenLeadIds = new Set();
   const upserts = new Map();
+  const whatsappEnrollmentIds = new Set();
   const mappingWrites = new Map();
   let skipped = 0;
   let assignedByRules = 0;
@@ -267,6 +275,8 @@ async function syncRows(sql, sheet) {
     const sheetNotes = safeCell(row, columns.notes);
     const source = previous.source || safeCell(row, columns.source) || `Google Sheet: ${sheetTitle}`;
     const createdAt = previous.createdAt || parseDate(safeCell(row, columns.createdAt)) || new Date().toISOString();
+    const whatsappOptIn = columns.whatsappOptIn >= 0 ? parseWhatsappConsent(safeCell(row, columns.whatsappOptIn)) : previous.whatsappOptIn === true;
+    const newWhatsappConsent = whatsappOptIn && previous.whatsappOptIn !== true;
     const lead = validLead({
       ...previous,
       id: existing?.id || randomBytes(16).toString('hex'),
@@ -280,8 +290,12 @@ async function syncRows(sql, sheet) {
       status,
       notes: existing ? (previous.source?.startsWith('Google Sheet:') && !previous.noteHistory?.length && sheetNotes ? sheetNotes : previous.notes) : sheetNotes,
       formAnswers,
+      whatsappOptIn,
+      whatsappOptInAt: newWhatsappConsent ? new Date().toISOString() : previous.whatsappOptInAt,
+      whatsappOptOutAt: newWhatsappConsent ? '' : previous.whatsappOptOutAt,
       createdAt,
     }, { assignedCounselorId: counselorId });
+    if (lead.whatsappOptIn === true && existing?.data?.whatsappOptIn !== true) whatsappEnrollmentIds.add(lead.id);
 
     const leadId = lead.id;
     seenLeadIds.add(leadId);
@@ -311,7 +325,12 @@ async function syncRows(sql, sheet) {
     );
     const existingIds = new Set(candidateRows.map((candidate) => candidate.id));
     for (const item of writes) {
-      if (!existingIds.has(item.id)) await runLeadAutomations(sql, item.data, 'new-lead');
+      if (!existingIds.has(item.id)) {
+        await runLeadAutomations(sql, item.data, 'new-lead');
+      }
+      if (!existingIds.has(item.id) || whatsappEnrollmentIds.has(item.id)) {
+        await enqueueWhatsappNurture(sql, item.data);
+      }
     }
   }
   const mappingEntries = [...mappingWrites].map(([record_key, lead_id]) => ({ record_key, lead_id }));

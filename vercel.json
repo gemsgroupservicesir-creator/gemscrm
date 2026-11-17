@@ -3,6 +3,9 @@
   "buildCommand": "VITE_ENABLE_CRM=true npm run build",
   "outputDirectory": "dist",
   "regions": ["sin1"],
+  "functions": {
+    "api/whatsapp-nurture.js": { "maxDuration": 60 }
+  },
   "headers": [
     {
       "source": "/(.*)",
@@ -22,6 +25,10 @@
     {
       "path": "/api/google-sheets-sync",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/whatsapp-nurture",
+      "schedule": "15 0 * * *"
     }
   ],
   "rewrites": [

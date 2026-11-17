@@ -101,6 +101,9 @@ img { max-width: 100%; }
 .form-fields input, .form-fields select { width: 100%; height: 42px; padding: 0 12px; border: 1px solid #dfe5eb; border-radius: 6px; outline: none; color: var(--navy); background: #fff; font-size: 12px; transition: border-color .2s, box-shadow .2s; }
 .form-fields input::placeholder { color: #a8b2be; }
 .form-fields input:focus, .form-fields select:focus { border-color: #6977d1; box-shadow: 0 0 0 3px rgba(48,62,152,.12); }
+.whatsapp-optin { display: flex !important; grid-column: 1 / -1; align-items: flex-start; gap: 8px; color: #748197 !important; font-size: 9px !important; font-weight: 500 !important; line-height: 1.55; }
+.whatsapp-optin input[type="checkbox"] { flex: 0 0 16px; width: 16px !important; height: 16px !important; min-height: 16px !important; margin: 1px 0 0; padding: 0 !important; accent-color: #303e98; box-shadow: none !important; }
+.whatsapp-optin span { padding: 0 !important; }
 .form-submit { width: 100%; min-height: 44px; }
 .form-note { margin: 10px 0 0; color: #99a3b0; text-align: center; font-size: 10px; }
 .form-success { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 12px; color: #2b8d62; font-size: 12px; font-weight: 700; }
@@ -430,6 +433,7 @@ img { max-width: 100%; }
 .contact-form-grid label { display: grid; gap: 7px; color: #405963; font-size: 13px; font-weight: 700; }
 .contact-form-grid input, .contact-form-grid select { width: 100%; min-height: 45px; padding: 10px 12px; border: 1px solid #dfe3f0; border-radius: 6px; background: #fff; color: #26325e; font: inherit; }
 .contact-form-grid input:focus, .contact-form-grid select:focus { outline: 2px solid #7f8bd7; outline-offset: 1px; }
+.contact-lead-form > .whatsapp-optin { margin: -9px 0 17px; }
 .university-detail { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 46px; align-items: start; }
 .university-detail-logo { display: block; width: auto; max-width: 220px; height: 78px; margin: 0 0 34px; object-fit: contain; object-position: left center; }
 .university-detail-main ul { display: grid; gap: 12px; margin: 25px 0 30px; padding: 0; list-style: none; }
@@ -683,6 +687,11 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .crm-form-grid input, .crm-form-grid select, .crm-form-grid textarea { width: 100%; min-height: 39px; padding: 9px 10px; border: 1px solid #dfe6ed; border-radius: 6px; outline: 0; color: #263951; background: #fff; font-size: 11px; }
 .crm-form-grid textarea { resize: vertical; }
 .crm-form-grid input:focus, .crm-form-grid select:focus, .crm-form-grid textarea:focus { border-color: #82a8d0; box-shadow: 0 0 0 3px rgba(40,100,173,.1); }
+.crm-whatsapp-consent { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding: 11px 12px; border: 1px solid #e7eaf4; border-radius: 8px; background: #fafbff; cursor: pointer; }
+.crm-whatsapp-consent > input { flex: 0 0 auto; width: 15px; height: 15px; margin: 2px 0 0; accent-color: #303e98; }
+.crm-whatsapp-consent > span { display: grid; gap: 4px; }
+.crm-whatsapp-consent strong { color: #44527c; font-size: 10px; }
+.crm-whatsapp-consent small { color: #7e899f; font-size: 9px; font-weight: 500; line-height: 1.45; }
 .crm-notes-field { grid-column: 1 / -1; }
 .crm-notes-section { display: grid; gap: 10px; margin-top: 18px; }
 .crm-notes-heading { display: flex; align-items: center; justify-content: space-between; color: #536a84; font-size: 11px; }
@@ -1130,6 +1139,7 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .landing-form input, .landing-form select, .landing-form textarea { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid #dfe6ed; border-radius: 5px; outline: 0; color: #263951; background: #fff; font-size: 11px; }
 .landing-form textarea { resize: vertical; line-height: 1.55; }
 .landing-form input:focus, .landing-form select:focus, .landing-form textarea:focus { border-color: var(--landing-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--landing-accent) 13%, transparent); }
+.landing-form .whatsapp-optin { margin: 0 0 2px; }
 .landing-field-label { color: #64758a; font-size: 10px; font-weight: 800; }
 .landing-field-label i { margin-left: 3px; color: #c64f4e; font-style: normal; }
 .landing-required-note { margin: -3px 0 0 !important; color: #98a4b1 !important; font-size: 9px !important; }
@@ -1585,6 +1595,19 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
 .growth-wa-composer textarea { min-height: 44px; resize: vertical; padding: 9px; border: 1px solid #e0e4f0; border-radius: 8px; color: #34416f; font: inherit; font-size: 9px; }
 .growth-wa-composer .crm-primary-button { align-self: start; min-height: 36px; font-size: 9px; }
 .growth-wa-composer > small { grid-column: 1 / -1; color: #818ba0; font-size: 8px; line-height: 1.5; }
+.growth-nurture-builder { display: grid; gap: 13px; padding: 15px; }
+.growth-nurture-topline { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 12px; border: 1px solid #e8eaf3; border-radius: 10px; background: #fafbff; }
+.growth-nurture-topline > div { display: grid; gap: 4px; }
+.growth-nurture-topline strong { color: #3f4d77; font-size: 10px; }
+.growth-nurture-topline small { color: #848ea3; font-size: 8px; line-height: 1.5; }
+.growth-nurture-list { display: grid; gap: 9px; }
+.growth-nurture-step { display: grid; grid-template-columns: 29px minmax(120px,.8fr) minmax(170px,1.2fr) minmax(100px,.7fr) minmax(180px,1.2fr) auto; align-items: start; gap: 9px; padding: 12px; border: 1px solid #eceef5; border-radius: 9px; }
+.growth-nurture-number { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 8px; color: #45539a; background: #eff0ff; font-size: 8px; font-weight: 850; }
+.growth-nurture-step label { display: grid; gap: 5px; color: #69758e; font-size: 8px; font-weight: 800; }
+.growth-nurture-step label input { width: 100%; min-height: 34px; padding: 7px 8px; border: 1px solid #e1e4ef; border-radius: 6px; color: #364473; background: #fff; font: inherit; font-size: 9px; }
+.growth-nurture-step label small { color: #8c95a8; font-size: 7px; font-weight: 500; line-height: 1.4; }
+.growth-nurture-step .growth-remove-button { align-self: start; margin-top: 18px; }
+.growth-nurture-actions { display: flex; justify-content: space-between; gap: 10px; }
 .growth-task-row { display: grid; grid-template-columns: 25px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #f0f1f6; }
 .growth-task-check { display: grid; width: 21px; height: 21px; place-items: center; border: 1px solid #d9ddec; border-radius: 7px; color: #fff; background: #fff; font-size: 11px; cursor: pointer; }
 .growth-task-check.checked { border-color: #4b9b6c; background: #4b9b6c; }
@@ -1716,6 +1739,12 @@ html.motion-enabled [data-reveal].is-visible { opacity: 1; translate: 0 0; }
   .growth-wa-composer { grid-template-columns: 1fr; }
   .growth-wa-composer .crm-primary-button { justify-self: end; }
   .growth-wa-composer > small { grid-column: auto; }
+  .growth-nurture-topline { grid-template-columns: 28px minmax(0,1fr); }
+  .growth-nurture-topline .crm-secondary-button { grid-column: 2; justify-self: start; }
+  .growth-nurture-step { grid-template-columns: 27px minmax(0,1fr); }
+  .growth-nurture-step label, .growth-nurture-step .growth-remove-button { grid-column: 2; }
+  .growth-nurture-step .growth-remove-button { justify-self: start; margin-top: 0; }
+  .growth-nurture-actions { align-items: stretch; flex-direction: column; }
   .growth-task-row { grid-template-columns: 22px minmax(0,1fr) auto; gap: 7px; padding: 10px; }
   .growth-task-row time { grid-column: 2; }
   .growth-inline-link { grid-column: 2; }

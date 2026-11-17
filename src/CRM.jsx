@@ -233,6 +233,7 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
       university: String(data.get('university') || ''),
       status: String(data.get('status') || 'New'),
     };
+    if (isAdmin) values.whatsappOptIn = data.get('whatsappOptIn') === 'on';
     if (isAdmin) values.assignedCounselorId = String(data.get('assignedCounselorId') || '');
     const noteBody = String(data.get('newNote') || '').trim();
     const previousNotes = Array.isArray(lead?.noteHistory) ? lead.noteHistory : [];
@@ -269,6 +270,7 @@ function LeadDialog({ lead, counselors, isAdmin, onClose }) {
             <label>Status<select name="status" defaultValue={lead?.status || 'New'}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></label>
             {isAdmin && <label>Counselor<select name="assignedCounselorId" defaultValue={counselors.some((counselor) => counselor.id === lead?.assignedCounselorId && counselor.username && counselor.credential && counselor.permissions?.leads) ? lead.assignedCounselorId : ''}><option value="">Unassigned</option>{counselors.filter((counselor) => counselor.username && counselor.credential && counselor.permissions?.leads).map((counselor) => <option key={counselor.id} value={counselor.id}>{counselor.name}</option>)}</select></label>}
           </div>
+          {isAdmin && <label className="crm-whatsapp-consent"><input name="whatsappOptIn" type="checkbox" defaultChecked={lead?.whatsappOptIn === true} /><span><strong>Student agreed to WhatsApp follow-ups</strong><small>Only enable this after the student clearly opted in. They can reply STOP to stop nurture messages.</small>{lead?.whatsappOptInAt && <small>Opted in {formatNoteDate(lead.whatsappOptInAt)}</small>}</span></label>}
           {Array.isArray(lead?.formAnswers) && lead.formAnswers.length > 0 && <section className="crm-form-answers" aria-label="Landing page answers"><strong>Landing page answers</strong>{lead.formAnswers.map((answer) => <div key={answer.id || answer.label}><span>{answer.label}</span><p>{answer.value}</p></div>)}</section>}
           <section className="crm-notes-section" aria-label="Lead notes">
             <div className="crm-notes-heading"><strong>Notes</strong><span>{(lead?.noteHistory?.length || 0) + (lead?.notes ? 1 : 0)} saved</span></div>

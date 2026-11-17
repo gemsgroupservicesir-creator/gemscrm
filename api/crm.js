@@ -3,6 +3,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import { createPublicLead, validLead } from '../lib/crmInput.js';
 import { matchLeadAssignmentRule, normalizeAssignmentValue } from '../lib/leadAssignment.js';
 import { runLeadAutomations } from '../lib/crmAutomation.js';
+import { cancelWhatsappNurture, enqueueWhatsappNurture, ensureWhatsappNurtureSchema } from '../lib/whatsappNurture.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const SESSION_HOURS = 12;
@@ -74,6 +75,7 @@ async function ensureSchema(sql) {
     await sql`CREATE TABLE IF NOT EXISTS crm_growth_features (
       id TEXT PRIMARY KEY, value JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await ensureWhatsappNurtureSchema(sql);
     await sql`CREATE TABLE IF NOT EXISTS crm_whatsapp_messages (
       id TEXT PRIMARY KEY, lead_id TEXT REFERENCES crm_leads(id) ON DELETE SET NULL,
       direction TEXT NOT NULL CHECK (direction IN ('inbound','outbound')),
@@ -344,6 +346,7 @@ export default async function handler(req, res) {
       const lead = createPublicLead(body, { assignedCounselorId, source });
       await insertLead(sql, lead);
       await runLeadAutomations(sql, lead, 'new-lead');
+      await enqueueWhatsappNurture(sql, lead);
       return json(res, 201, { ok: true });
     }
 
@@ -451,6 +454,9 @@ export default async function handler(req, res) {
       const featureRows = isAdmin
         ? await sql`SELECT id, value FROM crm_growth_features`
         : user.permissions?.leads ? await sql`SELECT id, value FROM crm_growth_features WHERE id IN ('automations','playbooks','qualification','knowledge')` : [];
+      const nurtureStatsRows = isAdmin
+        ? await sql`SELECT COUNT(*) FILTER (WHERE status = 'queued')::int AS queued, COUNT(*) FILTER (WHERE status = 'failed')::int AS failed FROM crm_whatsapp_nurture_jobs`
+        : [];
       return json(res, 200, {
         leads: leads.map((row) => row.data),
         counselors: counselorRows.map((row) => ({ id: row.id, username: row.username || '', name: row.name, permissions: row.permissions || {}, credential: row.password_hash ? { enabled: true } : null })),
@@ -463,6 +469,8 @@ export default async function handler(req, res) {
         integrations: {
           googleSheetsConnected: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON), websiteFormsConnected: true,
           whatsappConnected: Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_VERIFY_TOKEN && process.env.WHATSAPP_APP_SECRET),
+          whatsappNurtureReady: Boolean(process.env.CRON_SECRET),
+          whatsappNurtureQueued: Number(nurtureStatsRows[0]?.queued || 0), whatsappNurtureFailed: Number(nurtureStatsRows[0]?.failed || 0),
         },
         siteContent: siteRows.map((row) => ({ id: row.id, kind: row.kind, value: row.value })),
       });
@@ -525,12 +533,13 @@ export default async function handler(req, res) {
         await sql`INSERT INTO crm_whatsapp_messages (id, lead_id, direction, from_phone, to_phone, message_type, body, sent_by, status, sent_at)
           VALUES (${messageId}, ${leadId}, 'outbound', ${String(phoneNumberId)}, ${recipient}, 'text', ${message}, ${session.user.id}, 'sent', ${sentAt})
           ON CONFLICT (id) DO NOTHING`;
+        await cancelWhatsappNurture(sql, leadId);
         return json(res, 201, { message: { id: messageId, leadId, direction: 'outbound', from: String(phoneNumberId), to: recipient, type: 'text', body: message, status: 'sent', sentAt } });
       }
       if (action === 'growth-feature-save') {
         if (session.user.role !== 'admin') fail(403, 'Administrator access is required to change Growth Desk settings.');
         const id = String(body.id || '').trim();
-        const allowed = new Set(['automations', 'playbooks', 'qualification', 'knowledge', 'broadcasts', 'settings']);
+        const allowed = new Set(['automations', 'playbooks', 'qualification', 'knowledge', 'broadcasts', 'settings', 'whatsapp-nurture']);
         if (!allowed.has(id)) fail(400, 'Choose a valid workspace feature.');
         const input = body.value && typeof body.value === 'object' ? body.value : {};
         if (JSON.stringify(input).length > 120_000) fail(413, 'This workspace setting is too large to save.');
@@ -546,9 +555,28 @@ export default async function handler(req, res) {
             delayHours: Math.max(1, Math.min(720, Number(rule.delayHours) || 24)),
           })) };
         }
+        if (id === 'whatsapp-nurture') {
+          const steps = Array.isArray(input.steps) ? input.steps.slice(0, 10) : [];
+          const normalizedSteps = steps.map((step, index) => ({
+            id: String(step.id || `nurture-step-${index + 1}`).slice(0, 100),
+            delayDays: Math.max(0, Math.min(365, Math.trunc(Number(step.delayDays) || 0))),
+            templateName: String(step.templateName || '').trim().toLowerCase().slice(0, 512),
+            language: String(step.language || 'en_US').trim().slice(0, 20),
+            parameters: Array.isArray(step.parameters) ? [...new Set(step.parameters.filter((key) => ['name', 'course', 'university'].includes(key)))].slice(0, 10) : [],
+          }));
+          if (input.enabled === true) {
+            if (!process.env.WHATSAPP_ACCESS_TOKEN || !process.env.WHATSAPP_PHONE_NUMBER_ID || !process.env.WHATSAPP_VERIFY_TOKEN || !process.env.WHATSAPP_APP_SECRET || !process.env.CRON_SECRET) fail(409, 'Connect WhatsApp and configure CRON_SECRET in Vercel before enabling nurture.');
+            if (!normalizedSteps.length || normalizedSteps.some((step) => !/^[a-z0-9_]{1,512}$/.test(step.templateName) || !/^[a-z]{2}(?:_[A-Z]{2})?$/.test(step.language))) fail(400, 'Add a valid approved template name and language to every nurture step.');
+            if (normalizedSteps.some((step, index) => index > 0 && step.delayDays <= normalizedSteps[index - 1].delayDays)) fail(400, 'Set each nurture step to a later day than the step before it.');
+          }
+          value = { enabled: input.enabled === true, steps: normalizedSteps };
+        }
         const encoded = JSON.stringify(value);
         await sql`INSERT INTO crm_growth_features (id, value, updated_at) VALUES (${id}, ${encoded}::jsonb, NOW())
           ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`;
+        if (id === 'whatsapp-nurture') {
+          await sql`UPDATE crm_whatsapp_nurture_jobs SET status = 'cancelled', error_code = 'sequence_updated', updated_at = NOW() WHERE status = 'queued'`;
+        }
         return json(res, 200, { id, value });
       }
       if (action === 'growth-task-save') {
@@ -669,6 +697,7 @@ export default async function handler(req, res) {
         }
         await putLead(sql, lead);
         await runLeadAutomations(sql, lead, 'new-lead');
+        await enqueueWhatsappNurture(sql, lead);
         return json(res, 201, { lead });
       }
       if (action === 'lead-update') {
@@ -680,7 +709,14 @@ export default async function handler(req, res) {
         const current = rows[0].data;
         const changes = body.changes && typeof body.changes === 'object' ? body.changes : {};
         if (session.user.role !== 'admin' && Object.hasOwn(changes, 'assignedCounselorId')) fail(403, 'Only administrators can reassign leads.');
-        const updated = validLead({ ...current, ...changes, id }, {
+        if (session.user.role !== 'admin' && Object.hasOwn(changes, 'whatsappOptIn')) fail(403, 'Only an administrator can change a student’s WhatsApp consent record.');
+        const consentChanged = Object.hasOwn(changes, 'whatsappOptIn');
+        const updateValue = {
+          ...current, ...changes, id,
+          whatsappOptInAt: consentChanged && changes.whatsappOptIn === true ? (current.whatsappOptIn === true ? current.whatsappOptInAt : new Date().toISOString()) : current.whatsappOptInAt,
+          whatsappOptOutAt: consentChanged ? (changes.whatsappOptIn === true ? '' : (current.whatsappOptIn === true ? new Date().toISOString() : current.whatsappOptOutAt)) : current.whatsappOptOutAt,
+        };
+        const updated = validLead(updateValue, {
           assignedCounselorId: session.user.role === 'admin' ? changes.assignedCounselorId ?? current.assignedCounselorId : session.user.id,
         });
         if (session.user.role === 'admin' && updated.assignedCounselorId) {
@@ -688,6 +724,8 @@ export default async function handler(req, res) {
           if (!assigned[0]) fail(400, 'Choose an active counselor with lead access.');
         }
         await putLead(sql, updated);
+        if (updated.whatsappOptIn !== true || ['Closed', 'Enrolled'].includes(updated.status)) await cancelWhatsappNurture(sql, id);
+        else if (current.whatsappOptIn !== true && updated.whatsappOptIn === true) await enqueueWhatsappNurture(sql, updated);
         if ((current.status || 'New') !== (updated.status || 'New')) await runLeadAutomations(sql, updated, 'follow-up-status');
         return json(res, 200, { lead: updated });
       }
@@ -716,6 +754,7 @@ export default async function handler(req, res) {
             lead.id = randomBytes(16).toString('hex');
             await insertLead(sql, lead);
             await runLeadAutomations(sql, lead, 'new-lead');
+            await enqueueWhatsappNurture(sql, lead);
             imported += 1;
           } catch { skipped += 1; }
         }

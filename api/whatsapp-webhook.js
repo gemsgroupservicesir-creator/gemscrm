@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { ensureWhatsappNurtureSchema } from '../lib/whatsappNurture.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -81,6 +82,7 @@ export default async function handler(req, res) {
     if (!databaseUrl) return reply(res, 503, JSON.stringify({ error: 'Database connection is not configured.' }));
     const sql = neon(databaseUrl);
     await ensureMessageTable(sql);
+    await ensureWhatsappNurtureSchema(sql);
 
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
       for (const change of Array.isArray(entry.changes) ? entry.changes : []) {
@@ -95,9 +97,17 @@ export default async function handler(req, res) {
           const seconds = Number(message.timestamp);
           const sentAt = Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toISOString() : new Date().toISOString();
           const to = String(value.metadata?.phone_number_id || '').slice(0, 100);
+          const text = messageText(message);
           await sql`INSERT INTO crm_whatsapp_messages (id, lead_id, direction, from_phone, to_phone, message_type, body, status, sent_at)
-            VALUES (${wamid}, ${leads[0].id}, 'inbound', ${from}, ${to}, ${String(message.type || 'text').slice(0, 40)}, ${messageText(message)}, 'received', ${sentAt})
+            VALUES (${wamid}, ${leads[0].id}, 'inbound', ${from}, ${to}, ${String(message.type || 'text').slice(0, 40)}, ${text}, 'received', ${sentAt})
             ON CONFLICT (id) DO NOTHING`;
+          await sql`UPDATE crm_whatsapp_nurture_jobs SET status = 'cancelled', error_code = 'student_replied', updated_at = NOW()
+            WHERE lead_id = ${leads[0].id} AND status = 'queued'`;
+          if (/^(?:stop|unsubscribe|cancel|quit|end)(?:\s.*)?$/i.test(text.trim())) {
+            await sql`UPDATE crm_leads SET data = jsonb_set(jsonb_set(data, '{whatsappOptIn}', 'false'::jsonb, true), '{whatsappOptOutAt}', to_jsonb(${sentAt}::text), true) WHERE id = ${leads[0].id}`;
+            await sql`UPDATE crm_whatsapp_nurture_jobs SET status = 'cancelled', error_code = 'student_opted_out', updated_at = NOW()
+              WHERE lead_id = ${leads[0].id} AND status = 'queued'`;
+          }
         }
         for (const status of Array.isArray(value.statuses) ? value.statuses : []) {
           const wamid = String(status.id || '').slice(0, 200);

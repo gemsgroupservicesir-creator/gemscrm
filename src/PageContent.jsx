@@ -73,7 +73,7 @@ function LeadCapture() {
     const extra = [`Question: ${data.get('question')}`, `Preferred destination: ${data.get('destination')}`].join('\n');
     setBusy(true); setError(''); setSent(false);
     try {
-      await submitPublicLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('question') || 'Consultation'), source: 'Website contact form', notes: extra });
+      await submitPublicLead({ name: String(data.get('name') || ''), email: String(data.get('email') || ''), phone: String(data.get('phone') || ''), faculty: String(data.get('question') || 'Consultation'), whatsappOptIn: data.get('whatsappOptIn') === 'on', source: 'Website contact form', notes: extra });
       setSent(true); form.reset();
     } catch (submitError) { setError(submitError.message || 'We could not send your enquiry. Please try again.'); }
     finally { setBusy(false); }
@@ -89,6 +89,7 @@ function LeadCapture() {
       <label><Editable id="contact-form-label-question" text="Your question" editMode={false} as="span" /><select name="question">{['Academic counselling', 'Course and institution selection', 'Admission application guidance', 'Scholarship information', 'Other'].map((label, index) => <option key={label}>{getSiteCopy(`contact-question-option-${index}`, label)}</option>)}</select></label>
       <label><Editable id="contact-form-label-destination" text="Study plans" editMode={false} as="span" /><select name="destination">{['Higher education options', 'Still exploring'].map((label, index) => <option key={label}>{getSiteCopy(`contact-destination-option-${index}`, label)}</option>)}</select></label>
     </div>
+    <label className="whatsapp-optin"><input name="whatsappOptIn" type="checkbox" /><span>I agree to receive WhatsApp messages about my enquiry and admissions guidance. Reply STOP anytime.</span></label>
     <button className="button button-primary" type="submit" disabled={busy}>{busy ? 'Sending…' : <><Editable id="contact-form-submit" text="Send enquiry" editMode={false} as="span" /> <span aria-hidden="true">→</span></>}</button>
     {error && <p className="form-error" role="alert">{error}</p>}
     {sent && <p className="form-success" role="status"><Editable id="contact-form-success" text="Thank you. Your enquiry has been received." editMode={false} as="span" /></p>}

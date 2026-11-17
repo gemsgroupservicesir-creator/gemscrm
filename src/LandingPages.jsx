@@ -385,6 +385,7 @@ export function LandingPageView({ page }) {
         university: selectedUniversity,
         image,
         formAnswers,
+        whatsappOptIn: data.get('whatsappOptIn') === 'on',
         website,
         source: `Landing page: /landing/${page.slug}/`,
       }, page.slug);
@@ -411,6 +412,7 @@ export function LandingPageView({ page }) {
         {page.fields.includes('university') && <label><span className="landing-field-label">University/College{page.universityRequired && <i>*</i>}</span><select name="university" defaultValue="" required={Boolean(page.universityRequired)}><option value="">Select a University/College</option>{visibleUniversities.map((university) => <option key={university}>{university}</option>)}</select></label>}
         {page.fields.includes('image') && <label><span className="landing-field-label">Student image{page.imageRequired && <i>*</i>}</span><span className="landing-upload-hint">{page.imageRequired ? 'Required · JPG, PNG, or another image under 5 MB' : 'Optional · JPG, PNG, or another image under 5 MB'}<input className="landing-image-input" name="image" type="file" accept="image/*" required={Boolean(page.imageRequired)} /></span></label>}
         {(page.customFields || []).map((field) => <label key={field.id}><span className="landing-field-label">{field.label}{field.required && <i>*</i>}</span>{field.type === 'textarea' ? <textarea name={`customField-${field.id}`} rows="3" required={Boolean(field.required)} /> : field.type === 'select' ? <select name={`customField-${field.id}`} defaultValue="" required={Boolean(field.required)}><option value="">Select an option</option>{(field.options || '').split(',').map((option) => option.trim()).filter(Boolean).map((option) => <option key={option}>{option}</option>)}</select> : <input name={`customField-${field.id}`} type={['text', 'email', 'tel'].includes(field.type) ? field.type : 'text'} required={Boolean(field.required)} />}</label>)}
+        <label className="whatsapp-optin"><input name="whatsappOptIn" type="checkbox" /><span>I agree to receive WhatsApp messages about my enquiry and admissions guidance. Reply STOP anytime.</span></label>
         {formError && <p className="landing-form-error" role="alert">{formError}</p>}
         <button className="landing-submit" type="submit" disabled={submitting}>{submitting ? 'Sending…' : <>{page.buttonLabel} <span aria-hidden="true">→</span></>}</button>
         {sent && <p className="landing-success" role="status">{preview ? 'Preview only — this enquiry was not saved.' : 'Thanks — your enquiry has been sent to our team.'}</p>}

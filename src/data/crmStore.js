@@ -46,7 +46,7 @@ export async function importLeadsCsv(csv, counselors = [], defaultAssignedCounse
   const phoneIndex = indexOf('phone', 'phonenumber', 'mobile', 'mobilenumber');
   if (nameIndex === -1 || (emailIndex === -1 && phoneIndex === -1)) throw new Error('The CSV needs a Name column and an Email or Phone column.');
 
-  const knownHeaders = new Set(['name', 'fullname', 'student', 'studentname', 'email', 'emailaddress', 'gmail', 'phone', 'phonenumber', 'mobile', 'mobilenumber', 'course', 'courseofinterest', 'faculty', 'university', 'universityname', 'college', 'collegename', 'universitycollege', 'institution', 'status', 'assignedcounselor', 'source', 'createdat', 'notes', 'formanswers']);
+  const knownHeaders = new Set(['name', 'fullname', 'student', 'studentname', 'email', 'emailaddress', 'gmail', 'phone', 'phonenumber', 'mobile', 'mobilenumber', 'course', 'courseofinterest', 'faculty', 'university', 'universityname', 'college', 'collegename', 'universitycollege', 'institution', 'status', 'assignedcounselor', 'source', 'createdat', 'notes', 'formanswers', 'whatsappoptin', 'whatsappconsent', 'whatsapppermission', 'whatsappfollowupconsent']);
   const emails = new Set(readLeads().map((lead) => String(lead.email || '').trim().toLowerCase()).filter(Boolean));
   const phones = new Set(readLeads().map((lead) => String(lead.phone || '').replace(/\D/g, '')).filter(Boolean));
   const validStatuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
@@ -79,10 +79,12 @@ export async function importLeadsCsv(csv, counselors = [], defaultAssignedCounse
     });
     const dateValue = cell(indexOf('createdat'));
     const parsedDate = dateValue ? new Date(dateValue) : null;
+    const consentCell = cell(indexOf('whatsappoptin', 'whatsappconsent', 'whatsapppermission', 'whatsappfollowupconsent')).toLowerCase();
     leads.push({
       id: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name, email, phone, faculty: course, course, university, image: '', source,
       notes: cell(indexOf('notes')), noteHistory: [], formAnswers: [...formAnswers, ...extraAnswers],
+      whatsappOptIn: /^(yes|y|true|1|on|opted ?in|consented)$/.test(consentCell),
       assignedCounselorId, status: validStatuses.find((status) => status.toLowerCase() === cell(indexOf('status')).toLowerCase()) || 'New',
       createdAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : new Date().toISOString(),
     });
@@ -105,7 +107,7 @@ export async function unassignLeadsFromCounselor(counselorId) {
 }
 
 export function exportLeadsCsv(leads, counselors = []) {
-  const columns = ['name', 'email', 'phone', 'course', 'university', 'status', 'assignedCounselor', 'source', 'createdAt', 'notes', 'formAnswers'];
+  const columns = ['name', 'email', 'phone', 'course', 'university', 'status', 'assignedCounselor', 'source', 'createdAt', 'whatsappOptIn', 'whatsappOptInAt', 'notes', 'formAnswers'];
   const counselorNames = new Map(counselors.map((counselor) => [counselor.id, counselor.name]));
   const valueFor = (lead, column) => {
     if (column === 'assignedCounselor') return counselorNames.get(lead.assignedCounselorId) || '';
