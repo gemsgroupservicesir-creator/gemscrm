@@ -8,13 +8,13 @@ const SESSION_COOKIE = 'gems_crm_session';
 const SESSION_HOURS = 12;
 const DUMMY_PASSWORD_SALT = randomBytes(16).toString('hex');
 const DUMMY_PASSWORD_HASH = scryptSync(randomBytes(32).toString('base64url'), DUMMY_PASSWORD_SALT, 64).toString('hex');
-const GET_ACTIONS = new Set(['auth-status', 'public-content', 'public-landing-page', 'session', 'data']);
+const GET_ACTIONS = new Set(['auth-status', 'public-content', 'public-landing-page', 'session', 'data', 'whatsapp-messages']);
 const POST_ACTIONS = new Set([
   'lead-submit', 'login', 'bootstrap', 'logout', 'lead-create', 'lead-update', 'lead-import', 'attendance-end',
   'daily-report-save',
   'counselors-save', 'counselor-credentials', 'counselor-delete-credentials', 'counselor-delete',
   'lead-assignment-rules-save', 'lead-assignment-apply',
-  'growth-feature-save', 'growth-task-save', 'growth-task-delete',
+  'growth-feature-save', 'growth-task-save', 'growth-task-delete', 'whatsapp-send',
   'landing-page-save', 'landing-page-delete', 'site-content-save-many', 'site-content-remove-many', 'site-content-save', 'site-content-remove',
 ]);
 let schemaPromise;
@@ -74,6 +74,19 @@ async function ensureSchema(sql) {
     await sql`CREATE TABLE IF NOT EXISTS crm_growth_features (
       id TEXT PRIMARY KEY, value JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
+    await sql`CREATE TABLE IF NOT EXISTS crm_whatsapp_messages (
+      id TEXT PRIMARY KEY, lead_id TEXT REFERENCES crm_leads(id) ON DELETE SET NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('inbound','outbound')),
+      from_phone TEXT NOT NULL DEFAULT '', to_phone TEXT NOT NULL DEFAULT '',
+      message_type TEXT NOT NULL DEFAULT 'text', body TEXT NOT NULL DEFAULT '',
+      sent_by TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'received', sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`ALTER TABLE crm_whatsapp_messages ADD COLUMN IF NOT EXISTS sent_by TEXT NOT NULL DEFAULT ''`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_whatsapp_messages_lead_time_idx ON crm_whatsapp_messages (lead_id, sent_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_whatsapp_messages_time_idx ON crm_whatsapp_messages (sent_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_whatsapp_messages_sender_time_idx ON crm_whatsapp_messages (sent_by, created_at DESC)`;
     await sql`CREATE TABLE IF NOT EXISTS crm_lead_assignment_settings (
       id TEXT PRIMARY KEY CHECK (id = 'default'), rules JSONB NOT NULL DEFAULT '[]'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -447,13 +460,73 @@ export default async function handler(req, res) {
         leadAssignmentRules: Array.isArray(assignmentRuleRows[0]?.rules) ? assignmentRuleRows[0].rules : [],
         growthTasks: taskRows.map((row) => ({ ...row.data, id: row.id, leadId: row.lead_id, assignedCounselorId: row.assigned_to, dueAt: row.due_at, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at })),
         growthFeatures: Object.fromEntries(featureRows.map((row) => [row.id, row.value])),
-        integrations: { googleSheetsConnected: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON), websiteFormsConnected: true },
+        integrations: {
+          googleSheetsConnected: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON), websiteFormsConnected: true,
+          whatsappConnected: Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_VERIFY_TOKEN && process.env.WHATSAPP_APP_SECRET),
+        },
         siteContent: siteRows.map((row) => ({ id: row.id, kind: row.kind, value: row.value })),
       });
     }
 
+    if (req.method === 'GET' && action === 'whatsapp-messages') {
+      requireSection(session, 'leads');
+      const leadId = String(url.searchParams.get('leadId') || '').slice(0, 100);
+      const rows = leadId
+        ? await sql`SELECT m.id, m.lead_id, m.direction, m.from_phone, m.to_phone, m.message_type, m.body, m.status, m.sent_at
+          FROM crm_whatsapp_messages m JOIN crm_leads l ON l.id = m.lead_id
+          WHERE m.lead_id = ${leadId} AND (${session.user.role === 'admin'} OR l.assigned_counselor_id = ${session.user.id})
+          ORDER BY m.sent_at ASC LIMIT 300`
+        : session.user.role === 'admin'
+          ? await sql`SELECT m.id, m.lead_id, m.direction, m.from_phone, m.to_phone, m.message_type, m.body, m.status, m.sent_at, l.data AS lead_data
+            FROM crm_whatsapp_messages m JOIN crm_leads l ON l.id = m.lead_id ORDER BY m.sent_at DESC LIMIT 300`
+          : await sql`SELECT m.id, m.lead_id, m.direction, m.from_phone, m.to_phone, m.message_type, m.body, m.status, m.sent_at, l.data AS lead_data
+            FROM crm_whatsapp_messages m JOIN crm_leads l ON l.id = m.lead_id WHERE l.assigned_counselor_id = ${session.user.id} ORDER BY m.sent_at DESC LIMIT 300`;
+      return json(res, 200, { messages: rows.map((row) => ({ id: row.id, leadId: row.lead_id, direction: row.direction, from: row.from_phone, to: row.to_phone, type: row.message_type, body: row.body, status: row.status, sentAt: row.sent_at, lead: row.lead_data || undefined })) });
+    }
+
     if (req.method === 'POST') {
       const body = parseBody(req);
+      if (action === 'whatsapp-send') {
+        requireSection(session, 'leads');
+        const token = process.env.WHATSAPP_ACCESS_TOKEN || '';
+        const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+        if (!token || !phoneNumberId) fail(503, 'WhatsApp Cloud API credentials are not configured yet.');
+        const leadId = String(body.leadId || '').slice(0, 100);
+        const message = String(body.message || '').trim();
+        if (!leadId || !message || message.length > 4096) fail(400, 'Choose a lead and enter a message under 4,096 characters.');
+        const rows = await sql`SELECT id, assigned_counselor_id, phone_key FROM crm_leads WHERE id = ${leadId} LIMIT 1`;
+        const lead = rows[0];
+        if (!lead || (session.user.role !== 'admin' && lead.assigned_counselor_id !== session.user.id)) fail(404, 'Lead not found.');
+        const recipient = String(lead.phone_key || '').replace(/\D/g, '');
+        if (recipient.length < 8 || recipient.length > 16) fail(400, 'This lead needs a valid international phone number before WhatsApp can be used.');
+        const lastInbound = await sql`SELECT sent_at FROM crm_whatsapp_messages WHERE lead_id = ${leadId} AND direction = 'inbound' ORDER BY sent_at DESC LIMIT 1`;
+        if (!lastInbound[0] || Date.now() - new Date(lastInbound[0].sent_at).getTime() > 24 * 60 * 60 * 1000) {
+          fail(409, 'A student must message first, or reply within 24 hours, before a free-form message can be sent. Use an approved WhatsApp template for first contact.');
+        }
+        const recentSends = await sql`SELECT COUNT(*)::int AS count FROM crm_whatsapp_messages WHERE sent_by = ${session.user.id} AND direction = 'outbound' AND created_at > NOW() - INTERVAL '1 minute'`;
+        if (Number(recentSends[0]?.count || 0) >= 20) fail(429, 'Too many messages were sent in a short time. Wait a minute before sending again.');
+        const version = process.env.WHATSAPP_GRAPH_API_VERSION || 'v27.0';
+        let response;
+        try {
+          response = await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(phoneNumberId)}/messages`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: recipient, type: 'text', text: { preview_url: false, body: message } }),
+            signal: AbortSignal.timeout(15_000),
+          });
+        } catch { fail(502, 'Could not reach the WhatsApp service. Try again shortly.'); }
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          console.error('WhatsApp send failed.', response.status, result?.error?.code || 'unknown');
+          fail(502, 'WhatsApp could not accept this message. Check the number, permissions, and Meta account setup.');
+        }
+        const messageId = String(result?.messages?.[0]?.id || '');
+        if (!messageId) fail(502, 'WhatsApp did not return a message ID.');
+        const sentAt = new Date().toISOString();
+        await sql`INSERT INTO crm_whatsapp_messages (id, lead_id, direction, from_phone, to_phone, message_type, body, sent_by, status, sent_at)
+          VALUES (${messageId}, ${leadId}, 'outbound', ${String(phoneNumberId)}, ${recipient}, 'text', ${message}, ${session.user.id}, 'sent', ${sentAt})
+          ON CONFLICT (id) DO NOTHING`;
+        return json(res, 201, { message: { id: messageId, leadId, direction: 'outbound', from: String(phoneNumberId), to: recipient, type: 'text', body: message, status: 'sent', sentAt } });
+      }
       if (action === 'growth-feature-save') {
         if (session.user.role !== 'admin') fail(403, 'Administrator access is required to change Growth Desk settings.');
         const id = String(body.id || '').trim();
