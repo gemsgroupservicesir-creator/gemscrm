@@ -13,10 +13,11 @@ import { readLandingPages, subscribeToLandingPages } from './data/landingPages.j
 import { readSiteCollection, subscribeToSiteCollections } from './data/siteCopy.js';
 import { syncGoogleSheetLeads } from './data/crmSheets.js';
 import { loadCrmData } from './data/crmApi.js';
+import GrowthDashboard from './GrowthDashboard.jsx';
 
 const statuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
 const activeStatuses = new Set(['New', 'Contacted', 'Follow-up', 'Application']);
-const crmTabIcons = { leads: '◫', website: '⌂', 'landing-pages': '▧', attendance: '◷', 'daily-report': '▤', 'lead-assigner': '⇢', counselors: '♙' };
+const crmTabIcons = { dashboard: '▦', leads: '◫', website: '⌂', 'landing-pages': '▧', attendance: '◷', 'daily-report': '▤', 'lead-assigner': '⇢', counselors: '♙' };
 
 function formatDate(value) {
   const date = new Date(value);
@@ -673,7 +674,7 @@ function CRMWorkspace({ session, onLogout }) {
   const [sourceFilter, setSourceFilter] = useState('All sources');
   const [selectedLeadId, setSelectedLeadId] = useState('');
   const [dialog, setDialog] = useState(null);
-  const [activeTab, setActiveTab] = useState('leads');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [leadView, setLeadView] = useState('center');
   const importInputRef = useRef(null);
   const [importNotice, setImportNotice] = useState('');
@@ -697,6 +698,7 @@ function CRMWorkspace({ session, onLogout }) {
 
   const currentCounselor = counselors.find((counselor) => counselor.id === session.counselorId);
   const tabs = [
+    { id: 'dashboard', label: 'Dashboard', allowed: true },
     { id: 'leads', label: 'Leads', allowed: isAdmin || currentCounselor?.permissions?.leads },
     { id: 'website', label: 'Website editor', allowed: isAdmin || currentCounselor?.permissions?.website },
     { id: 'landing-pages', label: 'Landing pages', allowed: isAdmin || currentCounselor?.permissions?.landingPages },
@@ -713,6 +715,7 @@ function CRMWorkspace({ session, onLogout }) {
 
   const sortedLeads = useMemo(() => [...leads].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), [leads]);
   const accessibleLeads = isAdmin ? sortedLeads : sortedLeads.filter((lead) => lead.assignedCounselorId === session.counselorId);
+  const dashboardLeads = isAdmin || currentCounselor?.permissions?.leads ? accessibleLeads : [];
   const leadSources = useMemo(() => [...new Set(accessibleLeads.map((lead) => lead.source || 'Website enquiry'))].sort((left, right) => left.localeCompare(right)), [accessibleLeads]);
   const filteredLeads = useMemo(() => accessibleLeads.filter((lead) => {
     const query = search.trim().toLowerCase();
@@ -783,7 +786,7 @@ function CRMWorkspace({ session, onLogout }) {
           <div className="crm-sidebar-footer"><span><i /> Private workspace</span><p>Student records are available only to signed-in team members.</p></div>
         </aside>
         <div className="crm-workspace-content">
-        {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'lead-assigner' ? <LeadAssignerPanel counselors={counselors} leads={leads} /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
+        {currentTab === 'dashboard' ? <GrowthDashboard leads={dashboardLeads} counselors={counselors} isAdmin={isAdmin} name={currentCounselor?.name || session.name} syncing={syncingSheet} syncNotice={importNotice} syncError={importError} onSync={syncSheet} onAddLead={() => setDialog({ mode: 'new' })} onOpenTab={setActiveTab} onOpenLead={(id) => { setSelectedLeadId(id); setActiveTab('leads'); }} availableTabs={tabs.map((tab) => tab.id)} /> : currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'lead-assigner' ? <LeadAssignerPanel counselors={counselors} leads={leads} /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
           <div><span className="crm-kicker">GEMS GROUP SERVICES · ADMISSIONS</span><h1>{isAdmin ? 'Lead Center' : 'My Lead Center'}</h1><p>{isAdmin ? 'Review enquiries, follow up, and move students toward their next step.' : 'View and follow up on the leads assigned to your counselor account.'}</p></div>
           {isAdmin && <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}><span aria-hidden="true">＋</span> Add lead</button>}
