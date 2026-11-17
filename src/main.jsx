@@ -174,7 +174,7 @@ function InquiryForm({ editMode }) {
         <label><EditableText id="form-label-email" value="Email address" editMode={editMode} as="span" /><input name="email" type="email" autoComplete="email" placeholder={getSiteCopy('form-placeholder-email', 'you@example.com')} required /></label>
         <label><EditableText id="form-label-phone" value="Phone number" editMode={editMode} as="span" /><input name="phone" type="tel" autoComplete="tel" placeholder={getSiteCopy('form-placeholder-phone', '+977')} required /></label>
         <label><EditableText id="form-label-faculty" value="Faculty of interest" editMode={editMode} as="span" /><select name="faculty" defaultValue="" required><option value="" disabled>{getSiteCopy('form-faculty-placeholder', 'Select a faculty')}</option>{faculties.map((faculty) => <option key={faculty}>{faculty}</option>)}</select></label>
-        <label className="whatsapp-optin"><input name="whatsappOptIn" type="checkbox" /><span>I agree to receive WhatsApp messages about my enquiry and admissions guidance. Reply STOP anytime.</span></label>
+        <label className="whatsapp-optin"><input name="whatsappOptIn" type="checkbox" /><span>I agree to receive WhatsApp messages from GEMS Group Services about my enquiry and admissions guidance. Reply STOP anytime.</span></label>
       </div>
       <button className="button button-primary form-submit" type="submit" disabled={busy}>{busy ? 'Sending…' : <><EditableText id="form-submit" value="Send enquiry" editMode={editMode} /> <Icon name="arrow" size={16} /></>}</button>
       <EditableText id="form-note" value="Share a few details so our team can guide you." editMode={editMode} as="p" className="form-note" />

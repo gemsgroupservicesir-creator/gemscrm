@@ -38,6 +38,10 @@ function messageText(message) {
   return `[${type} message]`;
 }
 
+function isWhatsappOptOut(text) {
+  return /\b(?:stop(?:\s+messaging|\s+contacting|\s+sending)?(?:\s+me)?|unsubscribe|cancel all|quit|end messages|opt[\s-]?out|remove me|no more messages|leave me alone|don't message|do not message|don't contact|do not contact)\b/i.test(text);
+}
+
 async function ensureMessageTable(sql) {
   await sql`CREATE TABLE IF NOT EXISTS crm_whatsapp_messages (
     id TEXT PRIMARY KEY, lead_id TEXT REFERENCES crm_leads(id) ON DELETE SET NULL,
@@ -92,7 +96,7 @@ export default async function handler(req, res) {
           const wamid = String(message.id || '').slice(0, 200);
           const from = String(message.from || '').replace(/\D/g, '').slice(0, 20);
           if (!wamid || !from) continue;
-          const leads = await sql`SELECT id FROM crm_leads WHERE phone_key = ${from} ORDER BY created_at DESC LIMIT 1`;
+          const leads = await sql`SELECT id FROM crm_leads WHERE phone_key = ${from} ORDER BY created_at DESC`;
           if (!leads[0]) continue;
           const seconds = Number(message.timestamp);
           const sentAt = Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toISOString() : new Date().toISOString();
@@ -102,11 +106,11 @@ export default async function handler(req, res) {
             VALUES (${wamid}, ${leads[0].id}, 'inbound', ${from}, ${to}, ${String(message.type || 'text').slice(0, 40)}, ${text}, 'received', ${sentAt})
             ON CONFLICT (id) DO NOTHING`;
           await sql`UPDATE crm_whatsapp_nurture_jobs SET status = 'cancelled', error_code = 'student_replied', updated_at = NOW()
-            WHERE lead_id = ${leads[0].id} AND status = 'queued'`;
-          if (/^(?:stop|unsubscribe|cancel|quit|end)(?:\s.*)?$/i.test(text.trim())) {
-            await sql`UPDATE crm_leads SET data = jsonb_set(jsonb_set(data, '{whatsappOptIn}', 'false'::jsonb, true), '{whatsappOptOutAt}', to_jsonb(${sentAt}::text), true) WHERE id = ${leads[0].id}`;
+            WHERE lead_id IN (SELECT id FROM crm_leads WHERE phone_key = ${from}) AND status = 'queued'`;
+          if (isWhatsappOptOut(text.trim())) {
+            await sql`UPDATE crm_leads SET data = jsonb_set(jsonb_set(data, '{whatsappOptIn}', 'false'::jsonb, true), '{whatsappOptOutAt}', to_jsonb(${sentAt}::text), true) WHERE phone_key = ${from}`;
             await sql`UPDATE crm_whatsapp_nurture_jobs SET status = 'cancelled', error_code = 'student_opted_out', updated_at = NOW()
-              WHERE lead_id = ${leads[0].id} AND status = 'queued'`;
+              WHERE lead_id IN (SELECT id FROM crm_leads WHERE phone_key = ${from}) AND status = 'queued'`;
           }
         }
         for (const status of Array.isArray(value.statuses) ? value.statuses : []) {

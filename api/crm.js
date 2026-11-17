@@ -533,7 +533,8 @@ export default async function handler(req, res) {
         await sql`INSERT INTO crm_whatsapp_messages (id, lead_id, direction, from_phone, to_phone, message_type, body, sent_by, status, sent_at)
           VALUES (${messageId}, ${leadId}, 'outbound', ${String(phoneNumberId)}, ${recipient}, 'text', ${message}, ${session.user.id}, 'sent', ${sentAt})
           ON CONFLICT (id) DO NOTHING`;
-        await cancelWhatsappNurture(sql, leadId);
+        await sql`UPDATE crm_whatsapp_nurture_jobs SET status = 'cancelled', error_code = 'counselor_replied', updated_at = NOW()
+          WHERE lead_id IN (SELECT id FROM crm_leads WHERE phone_key = ${lead.phone_key}) AND status = 'queued'`;
         return json(res, 201, { message: { id: messageId, leadId, direction: 'outbound', from: String(phoneNumberId), to: recipient, type: 'text', body: message, status: 'sent', sentAt } });
       }
       if (action === 'growth-feature-save') {
