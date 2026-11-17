@@ -16,6 +16,7 @@ import { loadCrmData } from './data/crmApi.js';
 
 const statuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
 const activeStatuses = new Set(['New', 'Contacted', 'Follow-up', 'Application']);
+const crmTabIcons = { leads: '◫', website: '⌂', 'landing-pages': '▧', attendance: '◷', 'daily-report': '▤', 'lead-assigner': '⇢', counselors: '♙' };
 
 function formatDate(value) {
   const date = new Date(value);
@@ -775,8 +776,13 @@ function CRMWorkspace({ session, onLogout }) {
       <main className="crm-main">
         {!dataReady && <section className="crm-empty" role="status"><h2>Connecting securely…</h2><p>Loading CRM records from the server.</p></section>}
         {workspaceError && <p className="crm-import-error" role="alert">{workspaceError}</p>}
-        {dataReady && <>
-        {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>}
+        {dataReady && <div className="crm-workspace-shell">
+        <aside className="crm-sidebar">
+          <div className="crm-sidebar-heading"><span>Workspace</span><strong>{isAdmin ? 'Management' : 'Counselor desk'}</strong></div>
+          {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}><span className="crm-nav-icon" aria-hidden="true">{crmTabIcons[tab.id]}</span><span className="crm-nav-label">{tab.label}</span>{tab.id === 'leads' && <span className="crm-nav-count">{accessibleLeads.length}</span>}</button>)}</nav>}
+          <div className="crm-sidebar-footer"><span><i /> Private workspace</span><p>Student records are available only to signed-in team members.</p></div>
+        </aside>
+        <div className="crm-workspace-content">
         {currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'lead-assigner' ? <LeadAssignerPanel counselors={counselors} leads={leads} /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
           <div><span className="crm-kicker">GEMS GROUP SERVICES · ADMISSIONS</span><h1>{isAdmin ? 'Lead Center' : 'My Lead Center'}</h1><p>{isAdmin ? 'Review enquiries, follow up, and move students toward their next step.' : 'View and follow up on the leads assigned to your counselor account.'}</p></div>
@@ -810,7 +816,8 @@ function CRMWorkspace({ session, onLogout }) {
         </section>
         <p className="crm-privacy-note">Student records and counselor assignments are stored on the server. Access is checked for every CRM request.</p>
         </>}
-        </>}
+        </div>
+        </div>}
       </main>
       {dialog && isAdmin && <LeadDialog lead={dialog.mode === 'new' ? null : dialog} counselors={counselors} isAdmin={isAdmin} onClose={() => setDialog(null)} />}
       {dialog && !isAdmin && <LeadDialog lead={dialog} counselors={counselors} isAdmin={false} onClose={() => setDialog(null)} />}
@@ -863,6 +870,13 @@ function CRMLogin({ onAuthenticated }) {
   return <div className="crm-app crm-auth-app">
     <header className="crm-header"><div className="crm-header-inner"><a className="crm-brand" href={appUrl('/')} aria-label="GEMS Group Services CRM"><img src={appUrl('/images/logo.png')} alt="GEMS Group Services" /><span className="crm-brand-divider" /><span className="crm-brand-label">CRM</span></a><a className="crm-website-link" href={appUrl('/')}>View website <span aria-hidden="true">↗</span></a></div></header>
     <main className="crm-auth-main">
+      <section className="crm-auth-story" aria-label="CRM workspace overview">
+        <span className="crm-auth-story-kicker"><i /> Admissions workspace</span>
+        <h1>Every student enquiry, <em>moving forward.</em></h1>
+        <p>Keep conversations, counselor follow-ups, and application progress together in one clear workspace.</p>
+        <div className="crm-auth-highlights"><div><span>01</span><strong>Capture enquiries</strong><small>Website and campaign forms flow into your lead list.</small></div><div><span>02</span><strong>Follow up with care</strong><small>Keep notes and next steps with every student.</small></div><div><span>03</span><strong>Share the work</strong><small>Route leads to the counselor best placed to help.</small></div></div>
+        <div className="crm-auth-security"><span aria-hidden="true">✓</span><p><strong>Private team access</strong><br />Sign-in is required for student records.</p></div>
+      </section>
       <form className="crm-auth-card" onSubmit={submit}>
         <span className="crm-kicker">GEMS GROUP SERVICES · CRM</span>
         {checkingStatus ? <><h1>Connecting securely…</h1><p>Checking the server authentication service.</p></> : statusError ? <><h1>CRM service unavailable</h1><p>{statusError}</p><p className="crm-auth-footnote">Connect the Postgres database in Vercel, then redeploy this project.</p></> : <>
