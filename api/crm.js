@@ -2,6 +2,7 @@ import { neon } from '@neondatabase/serverless';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { createPublicLead, validLead } from '../lib/crmInput.js';
 import { matchLeadAssignmentRule, normalizeAssignmentValue } from '../lib/leadAssignment.js';
+import { runLeadAutomations } from '../lib/crmAutomation.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const SESSION_HOURS = 12;
@@ -13,6 +14,7 @@ const POST_ACTIONS = new Set([
   'daily-report-save',
   'counselors-save', 'counselor-credentials', 'counselor-delete-credentials', 'counselor-delete',
   'lead-assignment-rules-save', 'lead-assignment-apply',
+  'growth-feature-save', 'growth-task-save', 'growth-task-delete',
   'landing-page-save', 'landing-page-delete', 'site-content-save-many', 'site-content-remove-many', 'site-content-save', 'site-content-remove',
 ]);
 let schemaPromise;
@@ -61,6 +63,17 @@ async function ensureSchema(sql) {
       data JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS crm_leads_assignee_created_idx ON crm_leads (assigned_counselor_id, created_at DESC)`;
+    await sql`CREATE TABLE IF NOT EXISTS crm_growth_tasks (
+      id TEXT PRIMARY KEY, lead_id TEXT NOT NULL REFERENCES crm_leads(id) ON DELETE CASCADE,
+      assigned_to TEXT NOT NULL DEFAULT '', automation_key TEXT UNIQUE,
+      due_at TIMESTAMPTZ NOT NULL, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','completed','cancelled')),
+      data JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_growth_tasks_due_idx ON crm_growth_tasks (status, due_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS crm_growth_tasks_assignee_idx ON crm_growth_tasks (assigned_to, due_at)`;
+    await sql`CREATE TABLE IF NOT EXISTS crm_growth_features (
+      id TEXT PRIMARY KEY, value JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`;
     await sql`CREATE TABLE IF NOT EXISTS crm_lead_assignment_settings (
       id TEXT PRIMARY KEY CHECK (id = 'default'), rules JSONB NOT NULL DEFAULT '[]'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -317,6 +330,7 @@ export default async function handler(req, res) {
       }
       const lead = createPublicLead(body, { assignedCounselorId, source });
       await insertLead(sql, lead);
+      await runLeadAutomations(sql, lead, 'new-lead');
       return json(res, 201, { ok: true });
     }
 
@@ -416,6 +430,14 @@ export default async function handler(req, res) {
       const assignmentRuleRows = isAdmin
         ? await sql`SELECT rules FROM crm_lead_assignment_settings WHERE id = 'default' LIMIT 1`
         : [];
+      const taskRows = isAdmin
+        ? await sql`SELECT id, lead_id, assigned_to, due_at, status, data, created_at, updated_at FROM crm_growth_tasks ORDER BY due_at ASC`
+        : user.permissions?.leads ? await sql`SELECT t.id, t.lead_id, t.assigned_to, t.due_at, t.status, t.data, t.created_at, t.updated_at
+          FROM crm_growth_tasks t JOIN crm_leads l ON l.id = t.lead_id
+          WHERE l.assigned_counselor_id = ${user.id} ORDER BY t.due_at ASC` : [];
+      const featureRows = isAdmin
+        ? await sql`SELECT id, value FROM crm_growth_features`
+        : user.permissions?.leads ? await sql`SELECT id, value FROM crm_growth_features WHERE id IN ('automations','playbooks','qualification','knowledge')` : [];
       return json(res, 200, {
         leads: leads.map((row) => row.data),
         counselors: counselorRows.map((row) => ({ id: row.id, username: row.username || '', name: row.name, permissions: row.permissions || {}, credential: row.password_hash ? { enabled: true } : null })),
@@ -423,12 +445,75 @@ export default async function handler(req, res) {
         dailyReports: dailyReportRows.map((row) => ({ ...row.data, counselorId: row.counselor_id, counselorName: row.counselor_name || 'Counselor', date: String(row.report_date).slice(0, 10), updatedAt: row.updated_at })),
         landingPages: pageRows.map((row) => row.data),
         leadAssignmentRules: Array.isArray(assignmentRuleRows[0]?.rules) ? assignmentRuleRows[0].rules : [],
+        growthTasks: taskRows.map((row) => ({ ...row.data, id: row.id, leadId: row.lead_id, assignedCounselorId: row.assigned_to, dueAt: row.due_at, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at })),
+        growthFeatures: Object.fromEntries(featureRows.map((row) => [row.id, row.value])),
+        integrations: { googleSheetsConnected: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON), websiteFormsConnected: true },
         siteContent: siteRows.map((row) => ({ id: row.id, kind: row.kind, value: row.value })),
       });
     }
 
     if (req.method === 'POST') {
       const body = parseBody(req);
+      if (action === 'growth-feature-save') {
+        if (session.user.role !== 'admin') fail(403, 'Administrator access is required to change Growth Desk settings.');
+        const id = String(body.id || '').trim();
+        const allowed = new Set(['automations', 'playbooks', 'qualification', 'knowledge', 'broadcasts', 'settings']);
+        if (!allowed.has(id)) fail(400, 'Choose a valid workspace feature.');
+        const input = body.value && typeof body.value === 'object' ? body.value : {};
+        if (JSON.stringify(input).length > 120_000) fail(413, 'This workspace setting is too large to save.');
+        let value = input;
+        if (id === 'automations') {
+          const rules = Array.isArray(input.rules) ? input.rules.slice(0, 20) : [];
+          value = { rules: rules.map((rule, index) => ({
+            id: String(rule.id || `rule-${index + 1}`).slice(0, 100),
+            name: String(rule.name || 'Follow-up automation').trim().slice(0, 100),
+            trigger: ['new-lead', 'follow-up-status'].includes(rule.trigger) ? rule.trigger : 'new-lead',
+            enabled: rule.enabled === true,
+            title: String(rule.title || '').trim().slice(0, 180),
+            delayHours: Math.max(1, Math.min(720, Number(rule.delayHours) || 24)),
+          })) };
+        }
+        const encoded = JSON.stringify(value);
+        await sql`INSERT INTO crm_growth_features (id, value, updated_at) VALUES (${id}, ${encoded}::jsonb, NOW())
+          ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`;
+        return json(res, 200, { id, value });
+      }
+      if (action === 'growth-task-save') {
+        requireSection(session, 'leads');
+        const task = body.task && typeof body.task === 'object' ? body.task : {};
+        const id = String(task.id || randomBytes(16).toString('hex')).slice(0, 100);
+        const leadId = String(task.leadId || '').slice(0, 100);
+        if (!leadId) fail(400, 'Choose a student lead for this task.');
+        const leadRows = await sql`SELECT assigned_counselor_id FROM crm_leads WHERE id = ${leadId} LIMIT 1`;
+        if (!leadRows[0] || (session.user.role !== 'admin' && leadRows[0].assigned_counselor_id !== session.user.id)) fail(404, 'Lead not found.');
+        const existingRows = task.id ? await sql`SELECT id, assigned_to FROM crm_growth_tasks WHERE id = ${id} LIMIT 1` : [];
+        if (task.id && !existingRows[0]) fail(404, 'Task not found.');
+        if (existingRows[0] && session.user.role !== 'admin' && existingRows[0].assigned_to !== session.user.id) fail(403, 'You can update only tasks assigned to you.');
+        const title = String(task.title || '').trim().slice(0, 180);
+        if (title.length < 2) fail(400, 'Add a short title for the task.');
+        const dueDate = new Date(task.dueAt || '');
+        if (Number.isNaN(dueDate.getTime())) fail(400, 'Choose a valid due date and time.');
+        const allowedTypes = new Set(['follow-up', 'call', 'application', 'documents', 'site-visit', 'other']);
+        const allowedStatuses = new Set(['open', 'completed', 'cancelled']);
+        const type = allowedTypes.has(task.type) ? task.type : 'follow-up';
+        const status = allowedStatuses.has(task.status) ? task.status : 'open';
+        const assignedTo = session.user.role === 'admin' ? String(leadRows[0].assigned_counselor_id || '') : session.user.id;
+        const data = { title, type, description: String(task.description || '').trim().slice(0, 5000), outcome: String(task.outcome || '').trim().slice(0, 2000) };
+        await sql`INSERT INTO crm_growth_tasks (id, lead_id, assigned_to, due_at, status, data, created_at, updated_at)
+          VALUES (${id}, ${leadId}, ${assignedTo}, ${dueDate.toISOString()}, ${status}, ${JSON.stringify(data)}::jsonb, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET lead_id = EXCLUDED.lead_id, assigned_to = EXCLUDED.assigned_to,
+            due_at = EXCLUDED.due_at, status = EXCLUDED.status, data = EXCLUDED.data, updated_at = NOW()`;
+        return json(res, 200, { task: { ...data, id, leadId, assignedCounselorId: assignedTo, dueAt: dueDate.toISOString(), status } });
+      }
+      if (action === 'growth-task-delete') {
+        requireSection(session, 'leads');
+        const id = String(body.id || '').slice(0, 100);
+        const rows = await sql`SELECT t.assigned_to, l.assigned_counselor_id FROM crm_growth_tasks t JOIN crm_leads l ON l.id = t.lead_id WHERE t.id = ${id} LIMIT 1`;
+        if (!rows[0]) fail(404, 'Task not found.');
+        if (session.user.role !== 'admin' && (rows[0].assigned_to !== session.user.id || rows[0].assigned_counselor_id !== session.user.id)) fail(403, 'You can remove only tasks for leads assigned to you.');
+        await sql`DELETE FROM crm_growth_tasks WHERE id = ${id}`;
+        return json(res, 200, { ok: true });
+      }
       if (action === 'lead-assignment-rules-save') {
         if (session.user.role !== 'admin') fail(403, 'Administrator access is required.');
         const input = Array.isArray(body.rules) ? body.rules.slice(0, 200) : [];
@@ -510,6 +595,7 @@ export default async function handler(req, res) {
           if (!assigned[0]) fail(400, 'Choose an active counselor with lead access.');
         }
         await putLead(sql, lead);
+        await runLeadAutomations(sql, lead, 'new-lead');
         return json(res, 201, { lead });
       }
       if (action === 'lead-update') {
@@ -529,6 +615,7 @@ export default async function handler(req, res) {
           if (!assigned[0]) fail(400, 'Choose an active counselor with lead access.');
         }
         await putLead(sql, updated);
+        if ((current.status || 'New') !== (updated.status || 'New')) await runLeadAutomations(sql, updated, 'follow-up-status');
         return json(res, 200, { lead: updated });
       }
       if (action === 'lead-import') {
@@ -555,6 +642,7 @@ export default async function handler(req, res) {
             }
             lead.id = randomBytes(16).toString('hex');
             await insertLead(sql, lead);
+            await runLeadAutomations(sql, lead, 'new-lead');
             imported += 1;
           } catch { skipped += 1; }
         }
@@ -578,6 +666,7 @@ export default async function handler(req, res) {
           if (!permissions.leads) {
             await sql`UPDATE crm_leads SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
             await sql`UPDATE crm_landing_pages SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
+            await sql`UPDATE crm_growth_tasks SET assigned_to = '', updated_at = NOW() WHERE assigned_to = ${id}`;
             await removeCounselorFromLeadAssignmentRules(sql, id);
           }
         }
@@ -605,10 +694,12 @@ export default async function handler(req, res) {
           await sql`UPDATE crm_users SET disabled = TRUE, password_hash = NULL, password_salt = NULL WHERE id = ${id} AND role = 'counselor'`;
           await sql`UPDATE crm_leads SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
           await sql`UPDATE crm_landing_pages SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
+          await sql`UPDATE crm_growth_tasks SET assigned_to = '', updated_at = NOW() WHERE assigned_to = ${id}`;
         } else {
           await sql`UPDATE crm_users SET username = ${`pending-${id}`}, password_hash = NULL, password_salt = NULL WHERE id = ${id} AND role = 'counselor'`;
           await sql`UPDATE crm_leads SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
           await sql`UPDATE crm_landing_pages SET assigned_counselor_id = '', data = jsonb_set(data, '{assignedCounselorId}', '""'::jsonb, true) WHERE assigned_counselor_id = ${id}`;
+          await sql`UPDATE crm_growth_tasks SET assigned_to = '', updated_at = NOW() WHERE assigned_to = ${id}`;
         }
         await sql`UPDATE crm_attendance SET logged_out_at = COALESCE(logged_out_at, NOW()) WHERE counselor_id = ${id}`;
         await sql`DELETE FROM crm_sessions WHERE user_id = ${id}`;

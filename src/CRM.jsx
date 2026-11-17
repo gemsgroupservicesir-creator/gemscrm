@@ -14,10 +14,13 @@ import { readSiteCollection, subscribeToSiteCollections } from './data/siteCopy.
 import { syncGoogleSheetLeads } from './data/crmSheets.js';
 import { loadCrmData } from './data/crmApi.js';
 import GrowthDashboard from './GrowthDashboard.jsx';
+import GrowthFeaturePage from './GrowthFeatures.jsx';
+import { deleteGrowthTask, readGrowthFeatures, readGrowthTasks, saveGrowthTask, subscribeToGrowthFeatures, subscribeToGrowthTasks } from './data/crmGrowth.js';
 
 const statuses = ['New', 'Contacted', 'Follow-up', 'Application', 'Enrolled', 'Closed'];
 const activeStatuses = new Set(['New', 'Contacted', 'Follow-up', 'Application']);
-const crmTabIcons = { dashboard: '▦', leads: '◫', website: '⌂', 'landing-pages': '▧', attendance: '◷', 'daily-report': '▤', 'lead-assigner': '⇢', counselors: '♙' };
+const crmTabIcons = { dashboard: '▦', inbox: '◔', leads: '◫', copilot: '◌', automations: '⌘', playbooks: '▤', qualification: '✦', knowledge: '▣', recovery: '↻', broadcasts: '◉', calls: '☏', reports: '↗', integrations: '⧉', settings: '⚙', website: '⌂', 'landing-pages': '▧', attendance: '◷', 'daily-report': '▤', 'lead-assigner': '⇢', counselors: '♙' };
+const growthFeatureTabs = new Set(['inbox', 'copilot', 'automations', 'playbooks', 'qualification', 'knowledge', 'recovery', 'broadcasts', 'calls', 'reports', 'integrations', 'settings']);
 
 function formatDate(value) {
   const date = new Date(value);
@@ -667,6 +670,9 @@ function LeadAssignerPanel({ counselors, leads }) {
 function CRMWorkspace({ session, onLogout }) {
   const [leads, setLeads] = useState(() => readLeads());
   const [counselors, setCounselors] = useState(() => readCounselors());
+  const [growthTasks, setGrowthTasks] = useState(() => readGrowthTasks());
+  const [growthFeatures, setGrowthFeatures] = useState(() => readGrowthFeatures());
+  const [integrations, setIntegrations] = useState({});
   const [dataReady, setDataReady] = useState(false);
   const [workspaceError, setWorkspaceError] = useState('');
   const [search, setSearch] = useState('');
@@ -685,9 +691,11 @@ function CRMWorkspace({ session, onLogout }) {
 
   useEffect(() => subscribeToLeads(setLeads), []);
   useEffect(() => subscribeToCounselors(setCounselors), []);
+  useEffect(() => subscribeToGrowthTasks(setGrowthTasks), []);
+  useEffect(() => subscribeToGrowthFeatures(setGrowthFeatures), []);
   useEffect(() => {
     let active = true;
-    loadCrmData().then(() => { if (active) setDataReady(true); }).catch((loadError) => {
+    loadCrmData().then((data) => { if (active) { setIntegrations(data.integrations || {}); setDataReady(true); } }).catch((loadError) => {
       if (!active) return;
       setDataReady(true);
       setWorkspaceError(loadError.message || 'Could not load CRM records.');
@@ -697,9 +705,22 @@ function CRMWorkspace({ session, onLogout }) {
   }, [session.id, onLogout]);
 
   const currentCounselor = counselors.find((counselor) => counselor.id === session.counselorId);
+  const hasLeadAccess = isAdmin || currentCounselor?.permissions?.leads === true;
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', allowed: true },
+    { id: 'inbox', label: 'Team inbox', allowed: hasLeadAccess },
     { id: 'leads', label: 'Leads', allowed: isAdmin || currentCounselor?.permissions?.leads },
+    { id: 'copilot', label: 'Co-Pilot', allowed: hasLeadAccess },
+    { id: 'automations', label: 'Automations', allowed: hasLeadAccess },
+    { id: 'playbooks', label: 'Playbooks', allowed: hasLeadAccess },
+    { id: 'qualification', label: 'Qualification guide', allowed: hasLeadAccess },
+    { id: 'knowledge', label: 'Knowledge vault', allowed: hasLeadAccess },
+    { id: 'recovery', label: 'Lead recovery', allowed: hasLeadAccess },
+    { id: 'broadcasts', label: 'Campaign drafts', allowed: isAdmin },
+    { id: 'calls', label: 'Call hub', allowed: hasLeadAccess },
+    { id: 'reports', label: 'Reports', allowed: hasLeadAccess },
+    { id: 'integrations', label: 'Integrations', allowed: isAdmin },
+    { id: 'settings', label: 'Workspace settings', allowed: isAdmin },
     { id: 'website', label: 'Website editor', allowed: isAdmin || currentCounselor?.permissions?.website },
     { id: 'landing-pages', label: 'Landing pages', allowed: isAdmin || currentCounselor?.permissions?.landingPages },
     { id: 'attendance', label: 'Attendance', allowed: true },
@@ -767,6 +788,17 @@ function CRMWorkspace({ session, onLogout }) {
     }
   }
 
+  async function saveGrowthTaskRecord(task) {
+    const saved = await saveGrowthTask(task);
+    setWorkspaceError('');
+    return saved;
+  }
+
+  async function deleteGrowthTaskRecord(id) {
+    await deleteGrowthTask(id);
+    setWorkspaceError('');
+  }
+
   return (
     <div className="crm-app">
       <header className="crm-header">
@@ -782,11 +814,11 @@ function CRMWorkspace({ session, onLogout }) {
         {dataReady && <div className="crm-workspace-shell">
         <aside className="crm-sidebar">
           <div className="crm-sidebar-heading"><span>Workspace</span><strong>{isAdmin ? 'Management' : 'Counselor desk'}</strong></div>
-          {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}><span className="crm-nav-icon" aria-hidden="true">{crmTabIcons[tab.id]}</span><span className="crm-nav-label">{tab.label}</span>{tab.id === 'leads' && <span className="crm-nav-count">{accessibleLeads.length}</span>}</button>)}</nav>}
+          {tabs.length > 0 && <nav className="crm-workspace-tabs" aria-label="CRM sections">{tabs.map((tab) => <button key={tab.id} type="button" className={currentTab === tab.id ? 'active' : ''} aria-current={currentTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)}><span className="crm-nav-icon" aria-hidden="true">{crmTabIcons[tab.id]}</span><span className="crm-nav-label">{tab.label}</span>{tab.id === 'leads' && <span className="crm-nav-count">{accessibleLeads.length}</span>}{tab.id === 'inbox' && <span className="crm-nav-count">{growthTasks.filter((task) => task.status === 'open').length}</span>}</button>)}</nav>}
           <div className="crm-sidebar-footer"><span><i /> Private workspace</span><p>Student records are available only to signed-in team members.</p></div>
         </aside>
         <div className="crm-workspace-content">
-        {currentTab === 'dashboard' ? <GrowthDashboard leads={dashboardLeads} counselors={counselors} isAdmin={isAdmin} name={currentCounselor?.name || session.name} syncing={syncingSheet} syncNotice={importNotice} syncError={importError} onSync={syncSheet} onAddLead={() => setDialog({ mode: 'new' })} onOpenTab={setActiveTab} onOpenLead={(id) => { setSelectedLeadId(id); setActiveTab('leads'); }} availableTabs={tabs.map((tab) => tab.id)} /> : currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'lead-assigner' ? <LeadAssignerPanel counselors={counselors} leads={leads} /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
+        {currentTab === 'dashboard' ? <GrowthDashboard leads={dashboardLeads} counselors={counselors} isAdmin={isAdmin} name={currentCounselor?.name || session.name} syncing={syncingSheet} syncNotice={importNotice} syncError={importError} onSync={syncSheet} onAddLead={() => setDialog({ mode: 'new' })} onOpenTab={setActiveTab} onOpenLead={(id) => { setSelectedLeadId(id); setActiveTab('leads'); }} availableTabs={tabs.map((tab) => tab.id)} /> : growthFeatureTabs.has(currentTab) ? <GrowthFeaturePage tab={currentTab} leads={dashboardLeads} counselors={counselors} tasks={growthTasks} featureData={growthFeatures} integrations={integrations} isAdmin={isAdmin} onLead={(id) => { setSelectedLeadId(id); setActiveTab('leads'); }} onTaskSave={saveGrowthTaskRecord} onTaskDelete={deleteGrowthTaskRecord} onOpenTab={setActiveTab} /> : currentTab === 'attendance' ? <AttendancePanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'daily-report' ? <DailyWorkReportPanel counselors={counselors} counselorId={session.counselorId} isAdmin={isAdmin} /> : currentTab === 'website' ? <WebsiteEditor /> : currentTab === 'landing-pages' ? <LandingPageManager /> : currentTab === 'lead-assigner' ? <LeadAssignerPanel counselors={counselors} leads={leads} /> : currentTab === 'counselors' ? <CounselorManager counselors={counselors} /> : currentTab === 'no-access' ? <section className="crm-empty"><h2>No CRM sections are enabled</h2><p>Ask your administrator to grant access to at least one section.</p></section> : <>
         <div className="crm-title-row">
           <div><span className="crm-kicker">GEMS GROUP SERVICES · ADMISSIONS</span><h1>{isAdmin ? 'Lead Center' : 'My Lead Center'}</h1><p>{isAdmin ? 'Review enquiries, follow up, and move students toward their next step.' : 'View and follow up on the leads assigned to your counselor account.'}</p></div>
           {isAdmin && <button className="crm-primary-button" onClick={() => setDialog({ mode: 'new' })}><span aria-hidden="true">＋</span> Add lead</button>}

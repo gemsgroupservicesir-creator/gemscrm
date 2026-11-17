@@ -1,13 +1,20 @@
 import React, { useMemo } from 'react';
 
 const shortcuts = [
+  { id: 'inbox', icon: '◔', title: 'Team inbox', description: 'Review recent student enquiries and follow-up tasks.' },
   { id: 'leads', icon: '◫', title: 'Lead center', description: 'Search, assign, and update every enquiry.' },
+  { id: 'copilot', icon: '◌', title: 'Priority queue', description: 'See which students may need attention next.' },
   { id: 'landing-pages', icon: '▧', title: 'Campaign pages', description: 'Build student forms and track their leads.' },
   { id: 'lead-assigner', icon: '⇢', title: 'Lead routing', description: 'Assign enquiries by course and university.' },
+  { id: 'recovery', icon: '↻', title: 'Lead recovery', description: 'Find quiet leads and plan a follow-up.' },
+  { id: 'calls', icon: '☏', title: 'Call hub', description: 'Schedule counselor calls and record outcomes.' },
+  { id: 'reports', icon: '↗', title: 'Reports', description: 'Review lead stages, sources, and team workload.' },
   { id: 'website', icon: '⌂', title: 'Website editor', description: 'Update public website content and sections.' },
   { id: 'daily-report', icon: '▤', title: 'Daily work report', description: 'Review and write today’s counselor updates.' },
   { id: 'attendance', icon: '◷', title: 'Attendance', description: 'Check login time and daily attendance.' },
   { id: 'counselors', icon: '♙', title: 'Counselors', description: 'Manage counselor accounts and access.' },
+  { id: 'playbooks', icon: '▣', title: 'Counselor playbooks', description: 'Copy a saved student follow-up draft.' },
+  { id: 'automations', icon: '⌘', title: 'Automations', description: 'Create CRM tasks when lead events happen.' },
 ];
 
 function Stat({ icon, label, value, note, tone = 'blue' }) {

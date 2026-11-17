@@ -3,6 +3,7 @@ import { neon } from '@neondatabase/serverless';
 import { GoogleAuth } from 'google-auth-library';
 import { validLead } from '../lib/crmInput.js';
 import { matchLeadAssignmentRule } from '../lib/leadAssignment.js';
+import { runLeadAutomations } from '../lib/crmAutomation.js';
 
 const SESSION_COOKIE = 'gems_crm_session';
 const DEFAULT_SPREADSHEET_ID = '1z18sHEe4cH8FOfyfu2xy-iKPIUZovpPJ-6tf8d4V048';
@@ -130,6 +131,17 @@ async function syncRows(sql, sheet) {
     id TEXT PRIMARY KEY CHECK (id = 'default'), rules JSONB NOT NULL DEFAULT '[]'::jsonb,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`CREATE TABLE IF NOT EXISTS crm_growth_features (
+    id TEXT PRIMARY KEY, value JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE TABLE IF NOT EXISTS crm_growth_tasks (
+    id TEXT PRIMARY KEY, lead_id TEXT NOT NULL REFERENCES crm_leads(id) ON DELETE CASCADE,
+    assigned_to TEXT NOT NULL DEFAULT '', automation_key TEXT UNIQUE,
+    due_at TIMESTAMPTZ NOT NULL, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','completed','cancelled')),
+    data JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS crm_growth_tasks_due_idx ON crm_growth_tasks (status, due_at)`;
+  await sql`CREATE INDEX IF NOT EXISTS crm_growth_tasks_assignee_idx ON crm_growth_tasks (assigned_to, due_at)`;
   if (!rows.length || !rows[0]?.some((cell) => String(cell || '').trim())) {
     throw Object.assign(new Error('The selected sheet tab has no header row.'), { status: 400 });
   }
@@ -297,6 +309,10 @@ async function syncRows(sql, sheet) {
          email_key = EXCLUDED.email_key, phone_key = EXCLUDED.phone_key, data = EXCLUDED.data`,
       [JSON.stringify(writes)],
     );
+    const existingIds = new Set(candidateRows.map((candidate) => candidate.id));
+    for (const item of writes) {
+      if (!existingIds.has(item.id)) await runLeadAutomations(sql, item.data, 'new-lead');
+    }
   }
   const mappingEntries = [...mappingWrites].map(([record_key, lead_id]) => ({ record_key, lead_id }));
   if (mappingEntries.length) {

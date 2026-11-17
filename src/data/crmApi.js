@@ -5,6 +5,8 @@ const UPDATE_EVENTS = {
   dailyReports: 'gems-crm-daily-reports-updated',
   landingPages: 'gems-crm-landing-pages-updated',
   leadAssignmentRules: 'gems-crm-lead-assignment-rules-updated',
+  growthTasks: 'gems-crm-growth-tasks-updated',
+  growthFeatures: 'gems-crm-growth-features-updated',
 };
 
 export const crmCache = {
@@ -14,6 +16,9 @@ export const crmCache = {
   dailyReports: [],
   landingPages: [],
   leadAssignmentRules: [],
+  growthTasks: [],
+  growthFeatures: {},
+  integrations: {},
   siteCopy: new Map(),
   siteCollections: new Map(),
 };
@@ -58,6 +63,9 @@ export async function loadCrmData() {
   announce('dailyReports', data.dailyReports || []);
   announce('landingPages', data.landingPages || []);
   announce('leadAssignmentRules', data.leadAssignmentRules || []);
+  announce('growthTasks', data.growthTasks || []);
+  announce('growthFeatures', data.growthFeatures || {});
+  crmCache.integrations = data.integrations || {};
   if (data.siteContent) applySiteItems(data.siteContent);
   return data;
 }
